@@ -1,0 +1,736 @@
+import { useState, useEffect, useRef } from "react";
+import Select from "@/components/Select";
+import Message from "@/components/Message";
+import Icon from "@/components/Icon";
+import NewChat from "./NewChat";
+import History from "./History";
+import { fetchDifyMessage } from "./dify";
+import Answer from "./Answer";
+import Question from "./Question";
+import React from "react";
+import ReactMarkdown from "react-markdown";
+import { useColorMode } from "@chakra-ui/react";
+import { v4 as uuidv4 } from "uuid";
+import Mermaid from '@/components/Mermaid';
+import { motion } from 'framer-motion';
+
+const modes = [
+    {
+        id: "0",
+        title: "美股模型",
+    },
+    {
+        id: "1",
+        title: "加密模型",
+    },
+    {
+        id: "2",
+        title: "A股模型",
+    },
+];
+
+type ChatProps = {
+    children?: React.ReactNode;
+};
+
+const DIFy_API_KEY = "app-x3QH5Msqa48sfOUFgiGsAcFJ"; // TODO: 替换为你的 Dify API Key，建议用环境变量
+
+type Message = { role: 'user' | 'assistant'; content: string; thinking?: boolean };
+type Session = {
+    id: string;
+    title: string;
+    content: string;
+    image?: string;
+    messages: Message[];
+    lastUsed?: number;
+};
+
+function loadSessions(): Session[] {
+    try {
+        const data = localStorage.getItem("chat_sessions");
+        return data ? JSON.parse(data) : [];
+    } catch {
+        return [];
+    }
+}
+function saveSessions(sessions: Session[]) {
+    try {
+        localStorage.setItem("chat_sessions", JSON.stringify(sessions));
+    } catch {}
+}
+
+const Chat = ({ children }: ChatProps) => {
+    const [mode, setMode] = useState(modes[0]);
+    const [message, setMessage] = useState("");
+    const [visible, setVisible] = useState(false);
+    const [sessions, setSessions] = useState<Session[]>(() => loadSessions());
+    const [currentSessionId, setCurrentSessionId] = useState("");
+    const { colorMode } = useColorMode();
+    const isDark = colorMode === "dark";
+    const [streamingReply, setStreamingReply] = useState<string | null>(null);
+    const [streamingThinking, setStreamingThinking] = useState<string | null>(null);
+    const [thinkingDone, setThinkingDone] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const messageListRef = useRef<HTMLDivElement>(null);
+    const [isAutoScroll, setIsAutoScroll] = useState(true);
+    const [suggestions, setSuggestions] = useState<string[]>([]);
+    const [historyVisible, setHistoryVisible] = useState(true);
+    const [historyShouldRender, setHistoryShouldRender] = useState(false);
+    const [mounted, setMounted] = useState(false);
+    const abortControllerRef = useRef<AbortController | null>(null);
+
+    // 当前会话
+    const currentSession = sessions.find((s: Session) => s.id === currentSessionId);
+    const messages = currentSession?.messages || [];
+
+    // 持久化 sessions
+    useEffect(() => {
+        saveSessions(sessions);
+    }, [sessions]);
+
+    // 新建会话
+    const handleNewSession = () => {
+        setCurrentSessionId(''); // 清空当前会话ID，进入新建状态，但不立即加入sessions
+    };
+
+    // 切换会话
+    const handleSelectSession = (id: string) => {
+        // 置顶
+        const idx = sessions.findIndex(s => s.id === id);
+        let updatedSessions = sessions;
+        if (idx > 0) {
+            const selected = sessions[idx];
+            const rest = sessions.filter((s, i) => i !== idx);
+            updatedSessions = [selected, ...rest];
+        }
+        // 更新lastUsed
+        updatedSessions = updatedSessions.map(s => s.id === id ? { ...s, lastUsed: Date.now() } : s);
+        setSessions(updatedSessions);
+        setCurrentSessionId(id);
+    };
+
+    // 删除会话
+    const handleDeleteSession = (id: string) => {
+        let newSessions = sessions.filter(s => s.id !== id);
+        let newCurrentId = currentSessionId;
+        if (id === currentSessionId) {
+            if (newSessions.length > 0) {
+                newCurrentId = newSessions[0].id;
+            } else {
+                const newSession: Session = {
+                    id: uuidv4(),
+                    title: "",
+                    content: "",
+                    image: undefined,
+                    messages: [],
+                };
+                newSessions = [newSession];
+                newCurrentId = newSession.id;
+            }
+        }
+        setSessions(newSessions);
+        setCurrentSessionId(newCurrentId);
+    };
+
+    // 重命名会话
+    const handleRenameSession = (id: string, newTitle: string) => {
+        setSessions(sessions.map(s =>
+            s.id === id ? { ...s, title: newTitle } : s
+        ));
+    };
+
+    // 发送消息
+    const handleSend = async () => {
+        if (!message.trim()) return;
+        setSuggestions([]);
+        setLoading(true);
+        // 创建新的AbortController
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+        let userMsg: Message = { role: 'user', content: message };
+        let updatedSessions = sessions;
+        let sessionId = currentSessionId;
+        // 如果当前没有会话ID，说明是新对话，需新建会话
+        if (!currentSessionId) {
+            const newSession: Session = {
+                id: uuidv4(),
+                title: '',
+                content: '',
+                image: undefined,
+                messages: [userMsg],
+                lastUsed: Date.now(),
+            };
+            updatedSessions = [newSession, ...sessions];
+            sessionId = newSession.id;
+            setCurrentSessionId(sessionId);
+        } else {
+        // 先清理当前会话中所有内容为空的AI相关消息
+            updatedSessions = sessions.map((s: Session) => {
+            if (s.id !== currentSessionId) return s;
+            return {
+                ...s,
+                messages: s.messages.filter(m =>
+                    m.role === 'user' || (m.role === 'assistant' && m.content && m.content.trim()) || (m.thinking && m.content && m.content.trim())
+                )
+            };
+        });
+        // 再插入用户消息
+        updatedSessions = updatedSessions.map((s: Session) =>
+            s.id === currentSessionId
+                ? { ...s, messages: [...s.messages, userMsg], lastUsed: Date.now() }
+                : s
+        );
+        }
+        // 置顶当前会话
+        const idx = updatedSessions.findIndex(s => s.id === sessionId);
+        if (idx > 0) {
+            const selected = updatedSessions[idx];
+            const rest = updatedSessions.filter((s, i) => i !== idx);
+            updatedSessions = [selected, ...rest];
+        }
+        // 先插入思考气泡和流式正文气泡
+        const thinkingMsg: Message = { role: 'assistant', content: '', thinking: true };
+        const streamingFinalMsg: Message & { streaming?: boolean } = { role: 'assistant', content: '', streaming: true };
+        updatedSessions = updatedSessions.map((s: Session) =>
+            s.id === sessionId
+                ? { ...s, messages: [...s.messages, thinkingMsg, streamingFinalMsg] }
+                : s
+        );
+        setSessions(updatedSessions);
+        setMessage("");
+        try {
+            let lastThinkingRaw = '';
+            let lastFinalRaw = '';
+            let thinkingText = '';
+            let finalText = '';
+            // 多轮对话记忆：拼接最近5轮对话
+            const history = messages.slice(-10).map(m =>
+                m.role === 'user'
+                    ? `用户：${m.content}`
+                    : `AI：${m.content}`
+            ).join('\n');
+            const promptWithHistory =
+                (history ? history + '\n' : '') + `用户：${message}` +
+                '\n\n【重要要求】你必须先调用贾维斯工具箱🧰获取最新数据（如行情、K线、新闻等），分析内容必须基于工具返回的数据，禁止凭空臆测或只用已有知识。' +
+                '\n\n请在回答后额外给出3个用户可能会继续追问的相关问题，格式如下：\n【推荐问题】\n1. xxx\n2. xxx\n3. xxx' +
+                '\n\n请用风趣、易于理解但又不失专业性的方式回答用户。表达要轻松幽默、善用比喻和Emoji，但核心内容必须准确、专业，确保用户既能轻松看懂，也能获得权威解读。' +
+                '\n\n注意：请勿在任何回答或思考内容中提及你调用的工具、API、代码、数据源等实现细节，如确需提及统一表述为"贾维斯工具箱🧰"。';
+            const reply = await fetchDifyMessage(promptWithHistory, DIFy_API_KEY, (partial) => {
+                const { thinking, final } = splitThinkingAndFinal(partial);
+                if (thinking) {
+                    lastThinkingRaw = thinking;
+                    thinkingText = cleanThinkingText(removeHtmlTags(thinking));
+                    setStreamingThinking(thinkingText); // 让AI思考区流式实时展示
+                    // 实时更新最后一条thinking消息内容
+                    setSessions(prevSessions => prevSessions.map(s =>
+                        s.id === sessionId
+                            ? {
+                                ...s,
+                                messages: s.messages.map((m, i, arr) =>
+                                    m.thinking && i === arr.length - 2 // 倒数第二条是thinking
+                                        ? { ...m, content: thinkingText }
+                                        : m
+                                )
+                            }
+                            : s
+                    ));
+                }
+                if (final) {
+                    lastFinalRaw = final;
+                    finalText = removeHtmlTags(final);
+                    // 实时更新最后一条streaming正文消息内容
+                    setSessions(prevSessions => prevSessions.map(s =>
+                        s.id === sessionId
+                            ? {
+                                ...s,
+                                messages: s.messages.map((m, i, arr) =>
+                                    (m as any).streaming && i === arr.length - 1 // 最后一条是流式正文
+                                        ? { ...m, content: finalText }
+                                        : m
+                                )
+                            }
+                            : s
+                    ));
+                }
+            }, controller.signal);
+            // AI回复完成后，去除streaming标记，保留推理和正文
+            setSessions(prevSessions => prevSessions.map(s => {
+                if (s.id !== sessionId) return s;
+                // 自动命名：如果title为空，用用户输入的问题
+                let newTitle = s.title;
+                let newContent = s.content;
+                // 找到本会话的第一条用户消息
+                const firstUserMsg = s.messages.find(m => m.role === 'user');
+                const userQuestion = firstUserMsg ? firstUserMsg.content : userMsg.content;
+                if (!s.title && userQuestion) {
+                    newTitle = userQuestion.split(/[。.!?\n]/)[0].slice(0, 20) || userQuestion.slice(0, 20) || '新的对话';
+                }
+                if (!s.content && finalText) {
+                    newContent = finalText.slice(0, 40);
+                }
+                // 去除streaming标记
+                return {
+                    ...s,
+                    title: newTitle,
+                    content: newContent,
+                    messages: s.messages.map((m, i, arr) =>
+                        (m as any).streaming && i === arr.length - 1
+                            ? { role: 'assistant', content: finalText }
+                            : m
+                    )
+                };
+            }));
+            // 新增：保存推荐问题
+            setSuggestions(reply.suggestions || []);
+        } catch (e: any) {
+            let errorMsg;
+            if (e && e.message && (e.message.includes('中断') || e.message.includes('Abort'))) {
+                errorMsg = '对话已终止';
+            } else {
+                errorMsg = 'AI 回复失败，请稍后重试。';
+            if (e && e.message) errorMsg += `\n${e.message}`;
+            }
+            setSessions(prevSessions => prevSessions.map(s =>
+                s.id === sessionId
+                    ? { ...s, messages: [...s.messages, { role: 'assistant', content: errorMsg }] }
+                    : s
+            ));
+            setSuggestions([]);
+        } finally {
+            setLoading(false);
+            abortControllerRef.current = null;
+        }
+    };
+
+    // 过滤 HTML 标签
+    function removeHtmlTags(str: string) {
+        return str.replace(/<[^>]+>/g, '');
+    }
+
+    // 优化分离思考内容和正文，提取所有 <details>...</details> 和 [THINK]...[/THINK]
+    function splitThinkingAndFinal(text: string) {
+        // 匹配所有 <details>...</details>
+        const detailsRegex = /<details[\s\S]*?<summary>[\s\S]*?<\/summary>([\s\S]*?)<\/details>/gi;
+        let thinkingArr: string[] = [];
+        let match;
+        let textWithoutDetails = text;
+        while ((match = detailsRegex.exec(text)) !== null) {
+            thinkingArr.push(match[1].trim());
+        }
+        // 移除所有 <details>...</details>
+        textWithoutDetails = textWithoutDetails.replace(detailsRegex, '').trim();
+        // 匹配所有 [THINK]...[/THINK]
+        const thinkRegex = /\[THINK\]([\s\S]*?)\[\/THINK\]/gi;
+        let thinkMatch;
+        while ((thinkMatch = thinkRegex.exec(textWithoutDetails)) !== null) {
+            thinkingArr.push(thinkMatch[1].trim());
+        }
+        // 移除所有 [THINK]...[/THINK]
+        textWithoutDetails = textWithoutDetails.replace(thinkRegex, '').trim();
+        // 新增：自动剥离常见分析流程说明前缀到思考区
+        const flowPrefixRegex = /^(需要先.*?。|首先.*?。|分析步骤[:：].*?。|分析流程[:：].*?。|步骤[:：].*?。|请先.*?。|优先.*?。|失败则.*?。|如需.*?。|如果.*?，.*?。|需先.*?。|务必.*?。|务必先.*?。|务必首先.*?。|务必需要.*?。|务必请先.*?。|务必优先.*?。|务必失败则.*?。|务必如需.*?。|务必如果.*?，.*?。)/;
+        const flowMatch = textWithoutDetails.match(flowPrefixRegex);
+        if (flowMatch) {
+            thinkingArr.push(flowMatch[0].trim());
+            textWithoutDetails = textWithoutDetails.replace(flowPrefixRegex, '').trim();
+        }
+        return {
+            thinking: thinkingArr.join('\n\n'),
+            final: textWithoutDetails
+        };
+    }
+
+    // 工具函数：过滤无意义的思考提示
+    function cleanThinkingText(text: string) {
+        return text.replace(/^Thinking\s*\.\.\.|^思考中\s*\.\.\./i, '').trim();
+    }
+
+    // 滚动到底部（使用requestAnimationFrame确保渲染后滚动）
+    const scrollToBottom = () => {
+        if (messageListRef.current) {
+            requestAnimationFrame(() => {
+                messageListRef.current!.scrollTop = messageListRef.current!.scrollHeight;
+            });
+        }
+    };
+    // 监听用户滚动，用户手动滚动时关闭自动滚动
+    const handleScroll = () => {
+        if (!messageListRef.current) return;
+        const { scrollTop, scrollHeight, clientHeight } = messageListRef.current;
+        // 判断是否在底部（允许2px误差）
+        if (scrollHeight - scrollTop - clientHeight < 2) {
+            setIsAutoScroll(true);
+        } else {
+            setIsAutoScroll(false);
+        }
+    };
+    // 优化：流式输出时始终自动滚动，除非用户主动拖动
+    useEffect(() => {
+        if (isAutoScroll || loading) scrollToBottom();
+    }, [messages.length, streamingReply, streamingThinking, loading, isAutoScroll]);
+    // 新增：推理内容流式变化时也自动滚动
+    useEffect(() => {
+        if (isAutoScroll && streamingThinking) scrollToBottom();
+    }, [streamingThinking]);
+    // AI回复结束后恢复自动滚动
+    useEffect(() => {
+        if (!loading) setIsAutoScroll(true);
+    }, [loading]);
+    // 用户主动操作时恢复自动滚动
+    const handleSendWithScroll = async () => {
+        setIsAutoScroll(true);
+        await handleSend();
+    };
+    const handleSelectSessionWithScroll = (id: string) => {
+        setIsAutoScroll(true);
+        handleSelectSession(id);
+        // 切换推荐问题为新会话的推荐问题
+        const session = sessions.find(s => s.id === id);
+        if (session && Array.isArray(session.messages)) {
+            // 查找最后一条assistant消息中的推荐问题
+            const lastAssistant = [...session.messages].reverse().find(m => m.role === 'assistant' && m.content && m.content.includes('【推荐问题】'));
+            if (lastAssistant) {
+                // 提取推荐问题
+                const match = lastAssistant.content.match(/【推荐问题】([\s\S]*?)(?:$|\n{2,}|【|\[)/);
+                if (match) {
+                    const suggestBlock = match[1];
+                    const newSuggestions = suggestBlock.split(/\n|\r/)
+                        .map(line => line.replace(/^\d+\.\s*/, '').trim())
+                        .filter(line => line && !/^【/.test(line));
+                    setSuggestions(newSuggestions);
+                } else {
+                    setSuggestions([]);
+                }
+            } else {
+                setSuggestions([]);
+            }
+        } else {
+            setSuggestions([]);
+        }
+    };
+
+    // AI回复正文后自动收起思考气泡
+    useEffect(() => {
+        if (thinkingDone) setStreamingThinking(null);
+    }, [thinkingDone]);
+
+    // 控制动画和彻底隐藏
+    useEffect(() => {
+        if (historyVisible) {
+            setHistoryShouldRender(true);
+        } else {
+            // 动画时长与CSS一致
+            const timer = setTimeout(() => setHistoryShouldRender(false), 350);
+            return () => clearTimeout(timer);
+        }
+    }, [historyVisible]);
+
+    useEffect(() => { setMounted(true); }, []);
+
+    // 暂停/中断AI回复
+    const handlePause = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        setLoading(false);
+    };
+
+    return (
+        <div className="relative flex h-[calc(100svh-8.5rem)] xl:overflow-hidden xl:rounded-2xl md:h-[calc(100svh-11rem)] md:-mb-2">
+            {/* 隐藏/显示历史按钮，右上角，仅在历史区彻底隐藏后再显示 */}
+            {!historyVisible && !historyShouldRender && (
+                <button
+                    className="absolute z-20 right-2 top-2 w-8 h-8 flex items-center justify-center rounded-full bg-theme-on-surface-1 border border-theme-stroke shadow hover:bg-theme-n-8 transition-colors text-2xl"
+                    style={{ opacity: 0.85 }}
+                    onClick={() => setHistoryVisible(v => !v)}
+                    title="显示历史对话"
+                >
+                    {/* 菜单 SVG */}
+                    <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="w-6 h-6 text-gray-400 dark:text-gray-500 group-hover:text-white dark:group-hover:text-white transition-colors">
+                        <line x1="4" y1="7" x2="20" y2="7" />
+                        <line x1="4" y1="12" x2="20" y2="12" />
+                        <line x1="4" y1="17" x2="20" y2="17" />
+                    </svg>
+                </button>
+            )}
+            {/* 历史区显示时的按钮 */}
+            {historyVisible && (
+                <button
+                    className="absolute z-20 right-2 top-2 w-8 h-8 flex items-center justify-center rounded-full bg-theme-on-surface-1 border border-theme-stroke shadow hover:bg-theme-n-8 transition-colors text-2xl"
+                    style={{ opacity: 0.85 }}
+                    onClick={() => setHistoryVisible(v => !v)}
+                    title="隐藏历史对话"
+                >
+                    {/* 闭眼 SVG */}
+                    <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="w-6 h-6 text-gray-400 dark:text-gray-500 group-hover:text-white dark:group-hover:text-white transition-colors">
+                        <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.77 21.77 0 0 1 5.06-6.06" />
+                        <path d="M1 1l22 22" />
+                        <path d="M9.53 9.53A3 3 0 0 0 12 15a3 3 0 0 0 2.47-5.47" />
+                    </svg>
+                </button>
+            )}
+            {/* 主对话区，历史对话隐藏时占满全宽，Framer Motion 极致丝滑动画，首次加载也有动画 */}
+            <motion.div
+                className="card flex flex-col w-full"
+                animate={{ maxWidth: historyShouldRender ? (historyVisible ? 'calc(100% - 21.75rem)' : '100%') : '100%', minWidth: historyShouldRender ? (historyVisible ? 'calc(100% - 21.75rem)' : '100%') : '100%' }}
+                transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
+                style={{ minWidth: 0 }}
+            >
+                <div className="flex mb-6 md:mb-4">
+                    <Select
+                        className="min-w-[8.5rem]"
+                        value={mode}
+                        onChange={setMode}
+                        items={modes}
+                    />
+                </div>
+                <div ref={messageListRef} className="flex grow flex-col overflow-auto -mx-6 px-12 py-4 space-y-6 3xl:px-6 3xl:py-0" onScroll={handleScroll}>
+                    {messages.length === 0 && !loading && (children ? children : <NewChat />)}
+                    {(() => {
+                        // 找到最后一条用户消息的下标
+                        const lastUserIdx = (() => {
+                            let idx = -1;
+                            messages.forEach((m, i) => { if (m.role === 'user') idx = i; });
+                            return idx;
+                        })();
+                        // 判断是否需要在该位置插入骨架屏
+                        let needSkeleton = false;
+                        if (lastUserIdx !== -1 && loading) {
+                            // 查找下一个AI相关消息
+                            const nextMsg = messages[lastUserIdx + 1];
+                            const nextNextMsg = messages[lastUserIdx + 2];
+                            const isThinkingEmpty = nextMsg && nextMsg.thinking && (!nextMsg.content || !nextMsg.content.trim());
+                            const isAssistantEmpty = nextNextMsg && nextNextMsg.role === 'assistant' && (!nextNextMsg.content || !nextNextMsg.content.trim());
+                            // 只有在思考和AI回复都没有内容时才显示骨架屏
+                            if (isThinkingEmpty && (!nextNextMsg || isAssistantEmpty)) {
+                                needSkeleton = true;
+                            } else {
+                                needSkeleton = false;
+                            }
+                        }
+                        // 渲染消息，用户消息后插入骨架屏
+                        return messages.map((msg, idx) => {
+                            const msgNode = (() => {
+                                if (msg.role === 'user') {
+                                    return (
+                                        <div key={idx} style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                                            <div style={isDark ? {
+                                                background: 'rgba(255,255,255,0.08)',
+                                                color: '#fff',
+                                                fontWeight: 700,
+                                                borderRadius: 18,
+                                                padding: '14px 20px',
+                                                maxWidth: 480,
+                                                textAlign: 'left',
+                                                border: '1px solid #333',
+                                                boxShadow: '0 1px 4px #111',
+                                                marginRight: 8,
+                                                fontSize: 16,
+                                                wordBreak: 'break-word',
+                                                whiteSpace: 'pre-line',
+                                            } : {
+                                                background: '#f4f4f4',
+                                                color: '#111',
+                                                fontWeight: 700,
+                                                borderRadius: 18,
+                                                padding: '14px 20px',
+                                                maxWidth: 480,
+                                                textAlign: 'left',
+                                                marginRight: 8,
+                                                fontSize: 16,
+                                                boxShadow: 'none',
+                                                border: 'none',
+                                                wordBreak: 'break-word',
+                                                whiteSpace: 'pre-line',
+                                            }}>
+                                                {msg.content}
+                                            </div>
+                                        </div>
+                                    );
+                                } else if (msg.thinking) {
+                                    if (!msg.content) return null;
+                                    // 判断AI回复是否已完成（即后面有assistant消息且有内容）
+                                    const hasFinalAfter = messages.slice(idx + 1).some(m => m.role === 'assistant' && m.content && m.content.trim());
+                                    return <CollapsibleThinkingBubble key={idx} content={msg.content} openDefault={!hasFinalAfter} forceCollapseKey={hasFinalAfter ? idx : undefined} />;
+                                } else if (msg.role === 'assistant') {
+                                    if (!msg.content) return null;
+                                    return (
+                                        <div key={idx}>
+                                            <Answer content={filterThoughtPrefix(maskToolNames(msg.content.replace(/【推荐问题】([\s\S]*?)(?:$|\n{2,}|【|\[)/, '').trim()))} />
+                                            {/* 推荐问题文本和按钮，统一用 suggestions 渲染 */}
+                                            {idx === messages.length - 1 && suggestions.length > 0 && (
+                                                <div className="mt-3">
+                                                    <div className="mb-2 font-semibold text-theme-secondary">【推荐问题】</div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {suggestions.map((s, i) => (
+                                                            <button
+                                                                key={s}
+                                                                onClick={() => setMessage(stripHtmlTags(s))}
+                                                                className={
+                                                                    'px-4 py-1 rounded-full border border-theme-secondary text-theme-secondary bg-white dark:bg-[#23272f] hover:bg-theme-secondary hover:text-white transition-colors duration-150 text-sm font-medium shadow-sm'
+                                                                }
+                                                                style={{ marginRight: 8, marginBottom: 8 }}
+                                                            >
+                                                                {stripHtmlTags(s)}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                } else {
+                                    return null;
+                                }
+                            })();
+                            if (idx === lastUserIdx && needSkeleton) {
+                                return [msgNode, <ChatSkeleton key="skeleton" />];
+                            }
+                            return msgNode;
+                        });
+                    })()}
+                </div>
+                <Message
+                    className="shrink-0 mt-6 md:mt-4"
+                    value={message}
+                    onChange={(e: any) => setMessage(e.target.value)}
+                    autoFocus
+                    logo
+                    placeholder="提示：输入交易对和想分析的指标或因子"
+                    onSend={handleSendWithScroll}
+                    loading={loading}
+                    onPause={handlePause}
+                />
+                <button
+                    style={{ display: 'none' }}
+                    onClick={handleSendWithScroll}
+                    aria-label="发送"
+                />
+            </motion.div>
+            {/* 历史对话区，平滑滑动动画，动画结束后彻底隐藏 */}
+            {historyShouldRender && (
+                <div
+                    className={
+                        `transition-all duration-350 xl:transition-transform xl:duration-350 xl:ease-in-out ` +
+                        (historyVisible ? 'translate-x-0 opacity-100' : 'xl:translate-x-full opacity-0')
+                    }
+                    style={{ width: '21.75rem', minWidth: '21.75rem', maxWidth: '21.75rem' }}
+                >
+                    <History
+                        visible={historyVisible}
+                        onClose={() => setHistoryVisible(false)}
+                        sessions={sessions}
+                        activeId={currentSessionId}
+                        onSelect={handleSelectSessionWithScroll}
+                        onNew={handleNewSession}
+                        onDelete={handleDeleteSession}
+                        onRename={handleRenameSession}
+                    />
+                </div>
+            )}
+        </div>
+    );
+};
+
+// CollapsibleThinkingBubble支持外部控制折叠状态
+function CollapsibleThinkingBubble({ content, openDefault, forceCollapseKey }: { content: string; openDefault?: boolean; forceCollapseKey?: any }) {
+    const [open, setOpen] = useState(openDefault || false);
+    const { colorMode } = useColorMode();
+    const isDark = colorMode === "dark";
+    // 当forceCollapseKey变化时自动折叠
+    useEffect(() => {
+        if (forceCollapseKey !== undefined) setOpen(false);
+    }, [forceCollapseKey]);
+    return (
+        <div
+            style={{
+                background: isDark ? "#23272f" : "#f8f8f8",
+                color: isDark ? "#bbb" : "#888",
+                borderRadius: 8,
+                padding: 12,
+                marginBottom: 4,
+                fontSize: 14,
+                maxWidth: 480,
+                border: isDark ? "1px solid #333" : "none",
+            }}
+        >
+            <div
+                style={{ display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none" }}
+                onClick={() => setOpen((o) => !o)}
+            >
+                <span
+                    style={{
+                        display: "inline-block",
+                        transition: "transform 0.2s",
+                        transform: open ? "rotate(90deg)" : "rotate(0deg)",
+                        marginRight: 6,
+                    }}
+                >
+                    ▶
+                </span>
+                <b>AI 思考（点击展开/收起）</b>
+            </div>
+            {open && (
+                <div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
+                    <ReactMarkdown
+                        components={{
+                            code(props: any) {
+                                const {inline, className, children} = props;
+                                const match = /language-(\w+)/.exec(className || '');
+                                if (!inline && match && match[1] === 'mermaid') {
+                                    return <Mermaid chart={String(children)} />;
+                                }
+                                return <code className={className} {...props}>{children}</code>;
+                            }
+                        }}
+                    >{filterThoughtPrefix(maskToolNames(content))}</ReactMarkdown>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// 对话气泡风格骨架屏组件
+function ChatSkeleton() {
+    return (
+        <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 16 }}>
+            {/* 头像骨架 */}
+            <div className="w-9 h-9 rounded-full bg-gray-300 dark:bg-gray-700 animate-pulse mr-4" />
+            {/* 气泡骨架 */}
+            <div className="flex flex-col space-y-2">
+                <div className="w-40 h-4 rounded bg-gray-300 dark:bg-gray-700 animate-pulse" />
+                <div className="w-64 h-4 rounded bg-gray-200 dark:bg-gray-800 animate-pulse" />
+                <div className="w-32 h-4 rounded bg-gray-200 dark:bg-gray-800 animate-pulse" />
+            </div>
+        </div>
+    );
+}
+
+function stripHtmlTags(str: string) {
+    return str.replace(/<[^>]+>/g, '');
+}
+
+// 敏感工具方法名正则替换为"贾维斯工具箱🧰"
+function maskToolNames(text: string) {
+    return text.replace(/(kline_get|get_kline|option_chain_get|get_option_chain|yahoo_finance_news|get_news_sentiment|quote_get|get_quote|financial_summary_get|get_financial_summary|news_sentiment|get_news_sentiment|symbol='[A-Z]+'|interval='[a-z0-9]+'|参数：.*?')/gi, '贾维斯工具箱🧰');
+}
+
+// 过滤Thought/Thinking/思考中等前缀和相关内容
+function filterThoughtPrefix(text: string) {
+    return text
+        // 去除所有常见前缀（支持中英文、冒号、点、空格、括号、分隔符、标签等）
+        .replace(/^(Thought:?|Thinking:?|Thinking\s*\.*|思考中:?|思考中\s*\.*|思考|思路|思考一下|\[THINK\]|\[思考\]|\[思路\]|\(思考\)|\(思路\)|\*|—|——|\-|\.|\[.*?\])+/i, '')
+        // 去除多余的冒号、点号、分隔符
+        .replace(/^\s*[:：.。\-]+/, '')
+        // 去除开头的空白
+        .replace(/^\s+/, '')
+        // 去除独立一行的思考提示
+        .replace(/^\s*(Thought:?|Thinking:?|思考中:?|思考|思路|思考一下)\s*$/gim, '')
+        .trim();
+}
+
+export default Chat;

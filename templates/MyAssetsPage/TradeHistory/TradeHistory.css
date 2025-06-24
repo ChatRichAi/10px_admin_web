@@ -1,0 +1,35 @@
+/* 默认样式 */
+.duration {
+  display: inline-block;
+}
+
+/* 小屏幕样式 */
+@media (max-width: 600px) {
+  .duration {
+    display: block;
+    margin-top: 5px;
+  }
+}
+
+/* 表头圆角样式 */
+thead tr {
+  border-radius: 8px;
+}
+
+thead th:first-child {
+  border-top-left-radius: 8px;
+}
+
+thead th:last-child {
+  border-top-right-radius: 8px;
+}
+
+.dark thead tr {
+  background: #23272F;
+}
+.dark thead th {
+  color: #A0AEC0;
+}
+.dark tbody tr {
+  border-bottom: 1px solid #2D3748;
+}
