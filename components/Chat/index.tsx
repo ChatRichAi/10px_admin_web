@@ -13,6 +13,7 @@ import { useColorMode } from "@chakra-ui/react";
 import { v4 as uuidv4 } from "uuid";
 import Mermaid from '@/components/Mermaid';
 import { motion } from 'framer-motion';
+import rehypeRaw from "rehype-raw";
 
 const modes = [
     {
@@ -214,7 +215,6 @@ const Chat = ({ children }: ChatProps) => {
             ).join('\n');
             const promptWithHistory =
                 (history ? history + '\n' : '') + `用户：${message}` +
-                '\n\n【重要要求】你必须先调用贾维斯工具箱🧰获取最新数据（如行情、K线、新闻等），分析内容必须基于工具返回的数据，禁止凭空臆测或只用已有知识。' +
                 '\n\n请在回答后额外给出3个用户可能会继续追问的相关问题，格式如下：\n【推荐问题】\n1. xxx\n2. xxx\n3. xxx' +
                 '\n\n请用风趣、易于理解但又不失专业性的方式回答用户。表达要轻松幽默、善用比喻和Emoji，但核心内容必须准确、专业，确保用户既能轻松看懂，也能获得权威解读。' +
                 '\n\n注意：请勿在任何回答或思考内容中提及你调用的工具、API、代码、数据源等实现细节，如确需提及统一表述为"贾维斯工具箱🧰"。';
@@ -240,7 +240,7 @@ const Chat = ({ children }: ChatProps) => {
                 }
                 if (final) {
                     lastFinalRaw = final;
-                    finalText = removeHtmlTags(final);
+                    finalText = final;
                     // 实时更新最后一条streaming正文消息内容
                     setSessions(prevSessions => prevSessions.map(s =>
                         s.id === sessionId
@@ -310,7 +310,7 @@ const Chat = ({ children }: ChatProps) => {
         return str.replace(/<[^>]+>/g, '');
     }
 
-    // 优化分离思考内容和正文，提取所有 <details>...</details> 和 [THINK]...[/THINK]
+    // 优化分离思考内容和正文，提取所有 <details>...</details> 和 [THINK]，并递归剥离所有推理/分析/思考/流程/步骤等内容
     function splitThinkingAndFinal(text: string) {
         // 匹配所有 <details>...</details>
         const detailsRegex = /<details[\s\S]*?<summary>[\s\S]*?<\/summary>([\s\S]*?)<\/details>/gi;
@@ -330,12 +330,19 @@ const Chat = ({ children }: ChatProps) => {
         }
         // 移除所有 [THINK]...[/THINK]
         textWithoutDetails = textWithoutDetails.replace(thinkRegex, '').trim();
-        // 新增：自动剥离常见分析流程说明前缀到思考区
-        const flowPrefixRegex = /^(需要先.*?。|首先.*?。|分析步骤[:：].*?。|分析流程[:：].*?。|步骤[:：].*?。|请先.*?。|优先.*?。|失败则.*?。|如需.*?。|如果.*?，.*?。|需先.*?。|务必.*?。|务必先.*?。|务必首先.*?。|务必需要.*?。|务必请先.*?。|务必优先.*?。|务必失败则.*?。|务必如需.*?。|务必如果.*?，.*?。)/;
-        const flowMatch = textWithoutDetails.match(flowPrefixRegex);
-        if (flowMatch) {
-            thinkingArr.push(flowMatch[0].trim());
-            textWithoutDetails = textWithoutDetails.replace(flowPrefixRegex, '').trim();
+
+        // 递归剥离所有推理/分析/思考/流程/步骤等前缀段落
+        // 支持多行、冒号、点号、换行等
+        const flowPrefixRegex = /^(\s*(分析流程|推理过程|思考过程|分析步骤|推理步骤|分析思路|推理思路|分析|推理|思考|流程|步骤|首先|需要先|请先|优先|失败则|如需|如果.*?，|需先|务必|务必先|务必首先|务必需要|务必请先|务必优先|务必失败则|务必如需|务必如果.*?，)[：:.。\n\r\-\s]*[\s\S]*?)(?=\n{2,}|$)/i;
+        let found = true;
+        while (found) {
+            const flowMatch = textWithoutDetails.match(flowPrefixRegex);
+            if (flowMatch) {
+                thinkingArr.push(flowMatch[1].trim());
+                textWithoutDetails = textWithoutDetails.replace(flowPrefixRegex, '').trim();
+            } else {
+                found = false;
+            }
         }
         return {
             thinking: thinkingArr.join('\n\n'),
@@ -714,22 +721,25 @@ function stripHtmlTags(str: string) {
     return str.replace(/<[^>]+>/g, '');
 }
 
-// 敏感工具方法名正则替换为"贾维斯工具箱🧰"
+// 将所有"贾维斯工具箱🧰"文本和敏感方法名统一替换为"10px"并在前面加 favicon.ico 图标
 function maskToolNames(text: string) {
-    return text.replace(/(kline_get|get_kline|option_chain_get|get_option_chain|yahoo_finance_news|get_news_sentiment|quote_get|get_quote|financial_summary_get|get_financial_summary|news_sentiment|get_news_sentiment|symbol='[A-Z]+'|interval='[a-z0-9]+'|参数：.*?')/gi, '贾维斯工具箱🧰');
+    // 先替换"贾维斯工具箱🧰"
+    let result = text.replace(/贾维斯工具箱🧰/g, "<img src='/favicon.ico' style='width:1em;height:1em;vertical-align:-0.15em;display:inline'/>10px");
+    // 再替换敏感方法名
+    result = result.replace(
+        /(kline_get|get_kline|option_chain_get|get_option_chain|yahoo_finance_news|get_news_sentiment|quote_get|get_quote|financial_summary_get|get_financial_summary|news_sentiment|get_news_sentiment|symbol='[A-Z]+'|interval='[a-z0-9]+'|参数：.*?')/gi,
+        "<img src='/favicon.ico' style='width:1em;height:1em;vertical-align:-0.15em;display:inline'/>10px"
+    );
+    return result;
 }
 
 // 过滤Thought/Thinking/思考中等前缀和相关内容
 function filterThoughtPrefix(text: string) {
     return text
-        // 去除所有常见前缀（支持中英文、冒号、点、空格、括号、分隔符、标签等）
-        .replace(/^(Thought:?|Thinking:?|Thinking\s*\.*|思考中:?|思考中\s*\.*|思考|思路|思考一下|\[THINK\]|\[思考\]|\[思路\]|\(思考\)|\(思路\)|\*|—|——|\-|\.|\[.*?\])+/i, '')
-        // 去除多余的冒号、点号、分隔符
-        .replace(/^\s*[:：.。\-]+/, '')
-        // 去除开头的空白
-        .replace(/^\s+/, '')
-        // 去除独立一行的思考提示
-        .replace(/^\s*(Thought:?|Thinking:?|思考中:?|思考|思路|思考一下)\s*$/gim, '')
+        .replace(/^(Thought:?|Thinking:?|Thinking\s*\.*|思考中:?|思考中\s*\.*)/i, '')
+        .replace(/^\s*[:：.。]+/, '') // 去除多余的冒号、点号
+        .replace(/^(\[.*?\])?\s*/i, '') // 去除如[THINK]等标签
+        .replace(/^(\*|—|——|\-|\.)+/, '') // 去除开头的分隔符
         .trim();
 }
 
