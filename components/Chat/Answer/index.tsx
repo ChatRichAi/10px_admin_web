@@ -4,7 +4,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/cjs/styles/prism';
-import dynamic from 'next/dynamic';
 import rehypeRaw from 'rehype-raw';
 
 type AnswerProps = {
@@ -12,8 +11,6 @@ type AnswerProps = {
     image?: string;
     children?: React.ReactNode;
 };
-
-const Mermaid = dynamic(() => import('@/components/Mermaid'), { ssr: false });
 
 const Answer = ({ content, image, children }: AnswerProps) => {
     const { colorMode } = useColorMode();
@@ -42,9 +39,6 @@ const Answer = ({ content, image, children }: AnswerProps) => {
                     components={{
                       code({node, inline, className, children, ...props}: any) {
                         const match = /language-(\w+)/.exec(className || '');
-                        if (!inline && match && match[1] === 'mermaid') {
-                          return <Mermaid chart={String(children)} />;
-                        }
                         return !inline && match ? (
                           <SyntaxHighlighter
                             style={isDarkMode ? oneDark : oneLight}

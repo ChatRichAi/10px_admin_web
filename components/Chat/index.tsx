@@ -145,7 +145,6 @@ const Chat = ({ children }: ChatProps) => {
         if (!message.trim()) return;
         setSuggestions([]);
         setLoading(true);
-        // 创建新的AbortController
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
         }
@@ -154,7 +153,6 @@ const Chat = ({ children }: ChatProps) => {
         let userMsg: Message = { role: 'user', content: message };
         let updatedSessions = sessions;
         let sessionId = currentSessionId;
-        // 如果当前没有会话ID，说明是新对话，需新建会话
         if (!currentSessionId) {
             const newSession: Session = {
                 id: uuidv4(),
@@ -168,7 +166,6 @@ const Chat = ({ children }: ChatProps) => {
             sessionId = newSession.id;
             setCurrentSessionId(sessionId);
         } else {
-        // 先清理当前会话中所有内容为空的AI相关消息
             updatedSessions = sessions.map((s: Session) => {
             if (s.id !== currentSessionId) return s;
             return {
@@ -178,21 +175,18 @@ const Chat = ({ children }: ChatProps) => {
                 )
             };
         });
-        // 再插入用户消息
         updatedSessions = updatedSessions.map((s: Session) =>
             s.id === currentSessionId
                 ? { ...s, messages: [...s.messages, userMsg], lastUsed: Date.now() }
                 : s
         );
         }
-        // 置顶当前会话
         const idx = updatedSessions.findIndex(s => s.id === sessionId);
         if (idx > 0) {
             const selected = updatedSessions[idx];
             const rest = updatedSessions.filter((s, i) => i !== idx);
             updatedSessions = [selected, ...rest];
         }
-        // 先插入思考气泡和流式正文气泡
         const thinkingMsg: Message = { role: 'assistant', content: '', thinking: true };
         const streamingFinalMsg: Message & { streaming?: boolean } = { role: 'assistant', content: '', streaming: true };
         updatedSessions = updatedSessions.map((s: Session) =>
@@ -207,7 +201,6 @@ const Chat = ({ children }: ChatProps) => {
             let lastFinalRaw = '';
             let thinkingText = '';
             let finalText = '';
-            // 多轮对话记忆：拼接最近5轮对话
             const history = messages.slice(-10).map(m =>
                 m.role === 'user'
                     ? `用户：${m.content}`
@@ -217,13 +210,12 @@ const Chat = ({ children }: ChatProps) => {
                 (history ? history + '\n' : '') + `用户：${message}` +
                 '\n\n请在回答后额外给出3个用户可能会继续追问的相关问题，格式如下：\n【推荐问题】\n1. xxx\n2. xxx\n3. xxx' +
                 '\n\n请用风趣、易于理解但又不失专业性的方式回答用户。表达要轻松幽默、善用比喻和Emoji，但核心内容必须准确、专业，确保用户既能轻松看懂，也能获得权威解读。' +
-                '\n\n注意：请勿在任何回答或思考内容中提及你调用的工具、API、代码、数据源等实现细节，如确需提及统一表述为"贾维斯工具箱🧰"。';
+                '\n\n注意：请勿在任何回答或思考内容中提及你调用的工具、API、代码、数据源等实现细节，如确需提及统一表述为"<img src=\'/favicon.ico\' style=\'width:1em;height:1em;vertical-align:-0.15em;display:inline\'/>10px"。';
             const reply = await fetchDifyMessage(promptWithHistory, DIFy_API_KEY, (partial) => {
                 const { thinking, final } = splitThinkingAndFinal(partial);
                 if (thinking) {
-                    lastThinkingRaw = thinking;
-                    thinkingText = cleanThinkingText(removeHtmlTags(thinking));
-                    setStreamingThinking(thinkingText); // 让AI思考区流式实时展示
+                    // 每次都覆盖为最新的全部推理内容
+                    setStreamingThinking(cleanThinkingText(removeHtmlTags(thinking)));
                     // 实时更新最后一条thinking消息内容
                     setSessions(prevSessions => prevSessions.map(s =>
                         s.id === sessionId
@@ -231,7 +223,7 @@ const Chat = ({ children }: ChatProps) => {
                                 ...s,
                                 messages: s.messages.map((m, i, arr) =>
                                     m.thinking && i === arr.length - 2 // 倒数第二条是thinking
-                                        ? { ...m, content: thinkingText }
+                                        ? { ...m, content: cleanThinkingText(removeHtmlTags(thinking)) }
                                         : m
                                 )
                             }
@@ -241,7 +233,6 @@ const Chat = ({ children }: ChatProps) => {
                 if (final) {
                     lastFinalRaw = final;
                     finalText = final;
-                    // 实时更新最后一条streaming正文消息内容
                     setSessions(prevSessions => prevSessions.map(s =>
                         s.id === sessionId
                             ? {
@@ -256,13 +247,10 @@ const Chat = ({ children }: ChatProps) => {
                     ));
                 }
             }, controller.signal);
-            // AI回复完成后，去除streaming标记，保留推理和正文
             setSessions(prevSessions => prevSessions.map(s => {
                 if (s.id !== sessionId) return s;
-                // 自动命名：如果title为空，用用户输入的问题
                 let newTitle = s.title;
                 let newContent = s.content;
-                // 找到本会话的第一条用户消息
                 const firstUserMsg = s.messages.find(m => m.role === 'user');
                 const userQuestion = firstUserMsg ? firstUserMsg.content : userMsg.content;
                 if (!s.title && userQuestion) {
@@ -271,7 +259,6 @@ const Chat = ({ children }: ChatProps) => {
                 if (!s.content && finalText) {
                     newContent = finalText.slice(0, 40);
                 }
-                // 去除streaming标记
                 return {
                     ...s,
                     title: newTitle,
@@ -566,21 +553,31 @@ const Chat = ({ children }: ChatProps) => {
                                 } else if (msg.role === 'assistant') {
                                     if (!msg.content) return null;
                                     return (
-                                        <div key={idx}>
+                                        <div key={idx} style={{ position: 'relative' }}>
                                             <Answer content={filterThoughtPrefix(maskToolNames(msg.content.replace(/【推荐问题】([\s\S]*?)(?:$|\n{2,}|【|\[)/, '').trim()))} />
+                                            {/* 更小的纯svg复制icon按钮，无背景色，适配夜间模式 */}
+                                            <button
+                                                onClick={() => navigator.clipboard.writeText(stripHtmlTags(msg.content))}
+                                                className="absolute right-2 bottom-2 w-5 h-5 flex items-center justify-center p-0 m-0 border-none bg-transparent hover:text-theme-primary text-theme-secondary dark:text-theme-tertiary transition"
+                                                title="复制回复"
+                                                style={{ zIndex: 10 }}
+                                            >
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                                </svg>
+                                            </button>
                                             {/* 推荐问题文本和按钮，统一用 suggestions 渲染 */}
                                             {idx === messages.length - 1 && suggestions.length > 0 && (
-                                                <div className="mt-3">
+                                                <div className="w-full px-12" style={{ marginTop: 32 }}>
                                                     <div className="mb-2 font-semibold text-theme-secondary">【推荐问题】</div>
                                                     <div className="flex flex-wrap gap-2">
                                                         {suggestions.map((s, i) => (
                                                             <button
                                                                 key={s}
                                                                 onClick={() => setMessage(stripHtmlTags(s))}
-                                                                className={
-                                                                    'px-4 py-1 rounded-full border border-theme-secondary text-theme-secondary bg-white dark:bg-[#23272f] hover:bg-theme-secondary hover:text-white transition-colors duration-150 text-sm font-medium shadow-sm'
-                                                                }
-                                                                style={{ marginRight: 8, marginBottom: 8 }}
+                                                                className="px-4 py-1 rounded-full border border-theme-secondary text-theme-secondary bg-white dark:bg-[#23272f] hover:bg-theme-secondary hover:text-white transition-colors duration-150 text-sm font-medium shadow-sm"
+                                                                style={{ whiteSpace: 'nowrap' }}
                                                             >
                                                                 {stripHtmlTags(s)}
                                                             </button>
