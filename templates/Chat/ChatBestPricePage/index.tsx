@@ -10,8 +10,8 @@ const ChatPage = () => {
     return (
         <Layout title="10px AI">
             <Chat>
-                <Question content="Predict the best time to sell my Ethereum based on past trends" />
-                <Answer content="Based on current predictions from various sources, Ethereum's price is expected to rise in the near future. For instance, Forbes predicts that by the end of 2024, Ethereum could reach $5,000 1. Coinpedia also forecasts that Ethereum's March 2024 price may reach a potential high of $4,900 2. Another source mentions that Ethereum might increase by 5%, potentially reaching $3,687.11 by the next day .">
+                <Question content="根据历史趋势，预测我卖出以太坊的最佳时机" />
+                <Answer content="根据多方最新预测，近期以太坊价格有望上涨。例如，福布斯预计2024年底以太坊有望达到5000美元；Coinpedia 预测2024年3月价格可能最高达到4900美元；还有分析认为以太坊次日有望上涨5%，或将达到3687.11美元。">
                     <BestPrice />
                 </Answer>
             </Chat>

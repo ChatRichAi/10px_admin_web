@@ -10,8 +10,8 @@ const ChatPage = () => {
     return (
         <Layout title="10px AI">
             <Chat>
-                <Question content="Based on my assets, set up bulk price alerts" />
-                <Answer content="Certainly, you now have a total of 5 assets, and I have already set the price alert. Please review them below and make any manual adjustments if needed.">
+                <Question content="根据我的资产，批量设置价格预警" />
+                <Answer content="好的，你目前共持有5项资产，价格预警已为你设置好。请在下方查看，如有需要可手动调整。">
                     <PriceAlert />
                 </Answer>
             </Chat>

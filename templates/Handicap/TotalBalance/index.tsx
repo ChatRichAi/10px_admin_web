@@ -59,9 +59,9 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     return null;
 };
 
-type TotalBalanceProps = { symbol?: string };
+type TotalBalanceProps = { symbol?: string; className?: string };
 
-const TotalBalance = ({ symbol }: TotalBalanceProps) => {
+const TotalBalance = ({ symbol, className }: TotalBalanceProps) => {
     const [time, setTime] = useState(duration[1]);
     const { colorMode } = useColorMode();
     const isDarkMode = colorMode === "dark";
@@ -69,7 +69,7 @@ const TotalBalance = ({ symbol }: TotalBalanceProps) => {
 
     return (
         <Card
-            className="grow"
+            className={className}
             title="Volatility"
             option={time}
             setOption={setTime}

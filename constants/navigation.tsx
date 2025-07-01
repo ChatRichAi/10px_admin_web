@@ -19,7 +19,7 @@ export const navigation = [
     },
     {
         id: "3",
-        title: "交易记录",
+        title: "交易信号",
         icon: "notification",
         url: "/notification",
     },

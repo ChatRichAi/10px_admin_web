@@ -10,8 +10,8 @@ const ChatPage = () => {
     return (
         <Layout title="10px AI">
             <Chat>
-                <Question content="Auto withdraw to my MetaMask wallet if the ETH balance goes over 3 ETH." />
-                <Answer content="Sure, please confirm your Metamask address:">
+                <Question content="当ETH余额超过3枚时，自动提现到我的MetaMask钱包。" />
+                <Answer content="好的，请确认你的MetaMask钱包地址：">
                     <Withdraw />
                 </Answer>
             </Chat>

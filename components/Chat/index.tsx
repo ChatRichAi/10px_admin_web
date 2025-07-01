@@ -14,6 +14,9 @@ import { v4 as uuidv4 } from "uuid";
 import Mermaid from '@/components/Mermaid';
 import { motion } from 'framer-motion';
 import rehypeRaw from "rehype-raw";
+import html2canvas from "html2canvas";
+import Modal from "@/components/Modal";
+import remarkGfm from "remark-gfm";
 
 const modes = [
     {
@@ -79,6 +82,9 @@ const Chat = ({ children }: ChatProps) => {
     const [historyShouldRender, setHistoryShouldRender] = useState(false);
     const [mounted, setMounted] = useState(false);
     const abortControllerRef = useRef<AbortController | null>(null);
+    const [shareModalIdx, setShareModalIdx] = useState<number | null>(null);
+    const MAX_RETRY = 2;
+    const [retrying, setRetrying] = useState(false);
 
     // 当前会话
     const currentSession = sessions.find((s: Session) => s.id === currentSessionId);
@@ -145,28 +151,33 @@ const Chat = ({ children }: ChatProps) => {
         if (!message.trim()) return;
         setSuggestions([]);
         setLoading(true);
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-        }
-        const controller = new AbortController();
-        abortControllerRef.current = controller;
-        let userMsg: Message = { role: 'user', content: message };
-        let updatedSessions = sessions;
-        let sessionId = currentSessionId;
-        if (!currentSessionId) {
-            const newSession: Session = {
-                id: uuidv4(),
-                title: '',
-                content: '',
-                image: undefined,
-                messages: [userMsg],
-                lastUsed: Date.now(),
-            };
-            updatedSessions = [newSession, ...sessions];
-            sessionId = newSession.id;
-            setCurrentSessionId(sessionId);
-        } else {
-            updatedSessions = sessions.map((s: Session) => {
+        let retryCount = 0;
+        let lastError: any = null;
+        setRetrying(false);
+        while (retryCount <= MAX_RETRY) {
+            try {
+                if (abortControllerRef.current) {
+                    abortControllerRef.current.abort();
+                }
+                const controller = new AbortController();
+                abortControllerRef.current = controller;
+                let userMsg: Message = { role: 'user', content: message };
+                let updatedSessions = sessions;
+                let sessionId = currentSessionId;
+                if (!currentSessionId) {
+                    const newSession: Session = {
+                        id: uuidv4(),
+                        title: '',
+                        content: '',
+                        image: undefined,
+                        messages: [userMsg],
+                        lastUsed: Date.now(),
+                    };
+                    updatedSessions = [newSession, ...sessions];
+                    sessionId = newSession.id;
+                    setCurrentSessionId(sessionId);
+                } else {
+                    updatedSessions = sessions.map((s: Session) => {
             if (s.id !== currentSessionId) return s;
             return {
                 ...s,
@@ -180,8 +191,8 @@ const Chat = ({ children }: ChatProps) => {
                 ? { ...s, messages: [...s.messages, userMsg], lastUsed: Date.now() }
                 : s
         );
-        }
-        const idx = updatedSessions.findIndex(s => s.id === sessionId);
+                }
+                const idx = updatedSessions.findIndex(s => s.id === sessionId);
         if (idx > 0) {
             const selected = updatedSessions[idx];
             const rest = updatedSessions.filter((s, i) => i !== idx);
@@ -190,13 +201,12 @@ const Chat = ({ children }: ChatProps) => {
         const thinkingMsg: Message = { role: 'assistant', content: '', thinking: true };
         const streamingFinalMsg: Message & { streaming?: boolean } = { role: 'assistant', content: '', streaming: true };
         updatedSessions = updatedSessions.map((s: Session) =>
-            s.id === sessionId
+                    s.id === sessionId
                 ? { ...s, messages: [...s.messages, thinkingMsg, streamingFinalMsg] }
                 : s
         );
         setSessions(updatedSessions);
         setMessage("");
-        try {
             let lastThinkingRaw = '';
             let lastFinalRaw = '';
             let thinkingText = '';
@@ -208,22 +218,22 @@ const Chat = ({ children }: ChatProps) => {
             ).join('\n');
             const promptWithHistory =
                 (history ? history + '\n' : '') + `用户：${message}` +
-                '\n\n请在回答后额外给出3个用户可能会继续追问的相关问题，格式如下：\n【推荐问题】\n1. xxx\n2. xxx\n3. xxx' +
-                '\n\n请用风趣、易于理解但又不失专业性的方式回答用户。表达要轻松幽默、善用比喻和Emoji，但核心内容必须准确、专业，确保用户既能轻松看懂，也能获得权威解读。' +
-                '\n\n注意：请勿在任何回答或思考内容中提及你调用的工具、API、代码、数据源等实现细节，如确需提及统一表述为"<img src=\'/favicon.ico\' style=\'width:1em;height:1em;vertical-align:-0.15em;display:inline\'/>10px"。';
+                    '\n\n请在回答后额外给出3个用户可能会继续追问的相关问题，格式如下：\n【推荐问题】\n1. xxx\n2. xxx\n3. xxx' +
+                    '\n\n请用风趣、易于理解但又不失专业性的方式回答用户。表达要轻松幽默、善用比喻和Emoji，但核心内容必须准确、专业，确保用户既能轻松看懂，也能获得权威解读。' +
+                    '\n\n注意：请勿在任何回答或思考内容中提及你调用的工具、API、代码、数据源等实现细节，如确需提及统一表述为"<img src=\'/favicon.ico\' style=\'width:1em;height:1em;vertical-align:-0.15em;display:inline\'/>10px"。';
             const reply = await fetchDifyMessage(promptWithHistory, DIFy_API_KEY, (partial) => {
                 const { thinking, final } = splitThinkingAndFinal(partial);
                 if (thinking) {
-                    // 每次都覆盖为最新的全部推理内容
-                    setStreamingThinking(cleanThinkingText(removeHtmlTags(thinking)));
+                        // 每次都覆盖为最新的全部推理内容
+                        setStreamingThinking(cleanThinkingText(removeHtmlTags(thinking)));
                     // 实时更新最后一条thinking消息内容
                     setSessions(prevSessions => prevSessions.map(s =>
-                        s.id === sessionId
+                            s.id === sessionId
                             ? {
                                 ...s,
                                 messages: s.messages.map((m, i, arr) =>
                                     m.thinking && i === arr.length - 2 // 倒数第二条是thinking
-                                        ? { ...m, content: cleanThinkingText(removeHtmlTags(thinking)) }
+                                            ? { ...m, content: cleanThinkingText(removeHtmlTags(thinking)) }
                                         : m
                                 )
                             }
@@ -232,9 +242,9 @@ const Chat = ({ children }: ChatProps) => {
                 }
                 if (final) {
                     lastFinalRaw = final;
-                    finalText = final;
+                        finalText = final;
                     setSessions(prevSessions => prevSessions.map(s =>
-                        s.id === sessionId
+                            s.id === sessionId
                             ? {
                                 ...s,
                                 messages: s.messages.map((m, i, arr) =>
@@ -246,9 +256,9 @@ const Chat = ({ children }: ChatProps) => {
                             : s
                     ));
                 }
-            }, controller.signal);
+                }, controller.signal);
             setSessions(prevSessions => prevSessions.map(s => {
-                if (s.id !== sessionId) return s;
+                    if (s.id !== sessionId) return s;
                 let newTitle = s.title;
                 let newContent = s.content;
                 const firstUserMsg = s.messages.find(m => m.role === 'user');
@@ -272,24 +282,43 @@ const Chat = ({ children }: ChatProps) => {
             }));
             // 新增：保存推荐问题
             setSuggestions(reply.suggestions || []);
+                setLoading(false);
+                setRetrying(false);
+                abortControllerRef.current = null;
+                return;
         } catch (e: any) {
-            let errorMsg;
-            if (e && e.message && (e.message.includes('中断') || e.message.includes('Abort'))) {
-                errorMsg = '对话已终止';
-            } else {
-                errorMsg = 'AI 回复失败，请稍后重试。';
-            if (e && e.message) errorMsg += `\n${e.message}`;
+                lastError = e;
+                if (e && e.message && (e.message.includes('中断') || e.message.includes('Abort'))) {
+                    // 主动中断不重试
+                    setLoading(false);
+                    setRetrying(false);
+                    break;
+                } else if (retryCount < MAX_RETRY) {
+                    setRetrying(true);
+                    retryCount++;
+                    await new Promise(res => setTimeout(res, 800)); // 重试前稍作延迟
+                    continue;
+                } else {
+                    setLoading(false);
+                    setRetrying(false);
+                    break;
+                }
             }
+        }
+        // 最终失败时友好提示
+        let errorMsg = '';
+        if (lastError && lastError.message && (lastError.message.includes('中断') || lastError.message.includes('Abort'))) {
+            errorMsg = '对话已终止';
+        } else {
+            errorMsg = 'AI 回复失败，请检查网络或稍后重试。';
+            if (lastError && lastError.message) errorMsg += `\n${lastError.message}`;
+        }
             setSessions(prevSessions => prevSessions.map(s =>
-                s.id === sessionId
+                s.id === currentSessionId
                     ? { ...s, messages: [...s.messages, { role: 'assistant', content: errorMsg }] }
                     : s
             ));
             setSuggestions([]);
-        } finally {
-            setLoading(false);
-            abortControllerRef.current = null;
-        }
     };
 
     // 过滤 HTML 标签
@@ -342,7 +371,7 @@ const Chat = ({ children }: ChatProps) => {
         return text.replace(/^Thinking\s*\.\.\.|^思考中\s*\.\.\./i, '').trim();
     }
 
-    // 滚动到底部（使用requestAnimationFrame确保渲染后滚动）
+    // 自动滚动到底部（使用requestAnimationFrame确保内容渲染后滚动）
     const scrollToBottom = () => {
         if (messageListRef.current) {
             requestAnimationFrame(() => {
@@ -361,14 +390,12 @@ const Chat = ({ children }: ChatProps) => {
             setIsAutoScroll(false);
         }
     };
-    // 优化：流式输出时始终自动滚动，除非用户主动拖动
+    // 每次内容变化都自动滚动到底部，只要isAutoScroll为true
     useEffect(() => {
-        if (isAutoScroll || loading) scrollToBottom();
-    }, [messages.length, streamingReply, streamingThinking, loading, isAutoScroll]);
-    // 新增：推理内容流式变化时也自动滚动
-    useEffect(() => {
-        if (isAutoScroll && streamingThinking) scrollToBottom();
-    }, [streamingThinking]);
+        if (isAutoScroll) {
+            scrollToBottom();
+        }
+    }, [messages, streamingThinking, loading, isAutoScroll]);
     // AI回复结束后恢复自动滚动
     useEffect(() => {
         if (!loading) setIsAutoScroll(true);
@@ -432,6 +459,95 @@ const Chat = ({ children }: ChatProps) => {
         }
         setLoading(false);
     };
+
+    // 新增卡片分享弹窗组件
+    function CardShareModal({ visible, onClose, content }: { visible: boolean; onClose: () => void; content: string }) {
+        const { colorMode } = useColorMode();
+        const isDark = colorMode === "dark";
+        const [saving, setSaving] = useState(false);
+        const cardRef = useRef<HTMLDivElement>(null);
+
+        const handleSave = async () => {
+            if (!cardRef.current) return;
+            setSaving(true);
+            const canvas = await html2canvas(cardRef.current, { backgroundColor: null, useCORS: true, scale: 2 });
+            setSaving(false);
+            const dataUrl = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = `10px-ai-card.png`;
+            link.click();
+        };
+
+        return (
+            <Modal visible={visible} onClose={onClose} classWrap="max-w-[26rem] w-full p-0 bg-transparent border-none shadow-none">
+                <div className="flex flex-col items-center">
+                    <div
+                        ref={cardRef}
+                        className="w-full max-w-[375px] bg-white dark:bg-[#23272f] rounded-2xl shadow-lg p-0 relative flex flex-col"
+                        style={{ fontFamily: 'inherit', minHeight: 320 }}
+                    >
+                        {/* 海报头图 */}
+                        <img src="/images/bg-upgrade.jpg" alt="海报头图" className="w-full h-28 object-cover rounded-t-2xl" style={{ borderTopLeftRadius: 16, borderTopRightRadius: 16 }} />
+                        {/* 品牌区 */}
+                        <div className="flex items-center mb-4 px-6 mt-2">
+                            <img
+                                src="/favicon.ico"
+                                alt="logo"
+                                style={{
+                                    width: 28,
+                                    height: 28,
+                                    marginRight: 8,
+                                    display: 'block',
+                                }}
+                            />
+                            <span className="text-lg font-bold text-[#0C68E9]">10px AI</span>
+                            <span className="ml-auto text-xs text-theme-tertiary">{new Date().toLocaleString()}</span>
+                        </div>
+                        {/* AI回复内容（美化Markdown） */}
+                        <div className="text-base text-theme-primary break-words px-6 pb-4 leading-relaxed flex-1">
+                            <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={{
+                                    h1: ({node, ...props}) => <h1 className="text-xl font-bold my-3" {...props} />,
+                                    h2: ({node, ...props}) => <h2 className="text-lg font-bold my-2" {...props} />,
+                                    h3: ({node, ...props}) => <h3 className="text-base font-bold my-2" {...props} />,
+                                    p: ({node, ...props}) => <p className="my-2" {...props} />,
+                                    ul: ({node, ...props}) => <ul className="list-disc pl-5 my-2" {...props} />,
+                                    li: ({node, ...props}) => <li className="mb-1.5" {...props} />,
+                                    strong: ({node, ...props}) => <strong className="font-bold" {...props} />,
+                                    table: ({node, ...props}) => <table className="ai-markdown-table my-3" {...props} />,
+                                    th: ({node, ...props}) => <th className="ai-markdown-th px-2 py-1" {...props} />,
+                                    td: ({node, ...props}) => <td className="ai-markdown-td px-2 py-1" {...props} />,
+                                }}
+                            >
+                                {content}
+                            </ReactMarkdown>
+                        </div>
+                        {/* 品牌标识放在卡片内容区底部 */}
+                        <div className="flex justify-center items-center pb-4 pt-2 text-xs text-[#0C68E9] opacity-80 select-none pointer-events-none font-bold">
+                            <img src="/favicon.ico" alt="logo" style={{ width: 18, height: 18, display: 'inline', verticalAlign: '-0.3em', marginRight: 4 }} />10px AI
+                        </div>
+                    </div>
+                    <button
+                        className={
+                            "mt-6 px-6 py-2 rounded-full font-bold text-base shadow transition " +
+                            (isDark
+                                ? "bg-white text-[#0C68E9] hover:bg-theme-brand hover:text-white"
+                                : "bg-theme-primary text-white hover:bg-theme-brand")
+                        }
+                        onClick={handleSave}
+                        disabled={saving}
+                    >
+                        {saving ? '保存中...' : '保存图片'}
+                    </button>
+                </div>
+            </Modal>
+        );
+    }
+
+    // 更通用的移动端检测
+    const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 600px)').matches;
 
     return (
         <div className="relative flex h-[calc(100svh-8.5rem)] xl:overflow-hidden xl:rounded-2xl md:h-[calc(100svh-11rem)] md:-mb-2">
@@ -553,9 +669,27 @@ const Chat = ({ children }: ChatProps) => {
                                 } else if (msg.role === 'assistant') {
                                     if (!msg.content) return null;
                                     return (
-                                        <div key={idx} style={{ position: 'relative' }}>
+                                        <div
+                                            key={idx}
+                                            style={{ position: 'relative' }}
+                                            data-ai-reply-idx={idx}
+                                            className={isMobile ? 'bg-white rounded-2xl shadow-md px-4 py-3 my-3' : ''}
+                                        >
                                             <Answer content={filterThoughtPrefix(maskToolNames(msg.content.replace(/【推荐问题】([\s\S]*?)(?:$|\n{2,}|【|\[)/, '').trim()))} />
-                                            {/* 更小的纯svg复制icon按钮，无背景色，适配夜间模式 */}
+                                            {/* 分享按钮 */}
+                                            <button
+                                                onClick={() => setShareModalIdx(idx)}
+                                                className="absolute right-9 bottom-2 w-5 h-5 flex items-center justify-center p-0 m-0 border-none bg-transparent hover:text-theme-primary text-theme-secondary dark:text-theme-tertiary transition"
+                                                title="分享"
+                                                style={{ zIndex: 10 }}
+                                            >
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                                    <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" />
+                                                    <polyline points="16 6 12 2 8 6" />
+                                                    <line x1="12" y1="2" x2="12" y2="15" />
+                                                </svg>
+                                            </button>
+                                            {/* 复制icon按钮 */}
                                             <button
                                                 onClick={() => navigator.clipboard.writeText(stripHtmlTags(msg.content))}
                                                 className="absolute right-2 bottom-2 w-5 h-5 flex items-center justify-center p-0 m-0 border-none bg-transparent hover:text-theme-primary text-theme-secondary dark:text-theme-tertiary transition"
@@ -569,15 +703,22 @@ const Chat = ({ children }: ChatProps) => {
                                             </button>
                                             {/* 推荐问题文本和按钮，统一用 suggestions 渲染 */}
                                             {idx === messages.length - 1 && suggestions.length > 0 && (
-                                                <div className="w-full px-12" style={{ marginTop: 32 }}>
+                                                <div
+                                                    className={isMobile ? 'w-full mt-4 bg-white rounded-xl shadow px-3 py-2' : 'w-full px-12'}
+                                                    style={isMobile ? { marginTop: 16 } : { marginTop: 32 }}
+                                                >
                                                     <div className="mb-2 font-semibold text-theme-secondary">【推荐问题】</div>
-                                                    <div className="flex flex-wrap gap-2">
+                                                    <div className={isMobile ? 'flex flex-col gap-2' : 'flex flex-wrap gap-2'}>
                                                         {suggestions.map((s, i) => (
                                                             <button
                                                                 key={s}
                                                                 onClick={() => setMessage(stripHtmlTags(s))}
-                                                                className="px-4 py-1 rounded-full border border-theme-secondary text-theme-secondary bg-white dark:bg-[#23272f] hover:bg-theme-secondary hover:text-white transition-colors duration-150 text-sm font-medium shadow-sm"
-                                                                style={{ whiteSpace: 'nowrap' }}
+                                                                className={
+                                                                    isMobile
+                                                                        ? 'w-full block rounded-full border border-theme-secondary text-theme-secondary bg-white dark:bg-[#23272f] hover:bg-theme-secondary hover:text-white transition-colors duration-150 text-base font-medium shadow-sm mb-2'
+                                                                        : 'px-4 py-1 rounded-full border border-theme-secondary text-theme-secondary bg-white dark:bg-[#23272f] hover:bg-theme-secondary hover:text-white transition-colors duration-150 text-sm font-medium shadow-sm'
+                                                                }
+                                                                style={isMobile ? { whiteSpace: 'normal' } : { whiteSpace: 'nowrap' }}
                                                             >
                                                                 {stripHtmlTags(s)}
                                                             </button>
@@ -634,6 +775,20 @@ const Chat = ({ children }: ChatProps) => {
                         onDelete={handleDeleteSession}
                         onRename={handleRenameSession}
                     />
+                </div>
+            )}
+            {/* 渲染分享弹窗 */}
+            {shareModalIdx !== null && (
+                <CardShareModal
+                    visible={shareModalIdx !== null}
+                    onClose={() => setShareModalIdx(null)}
+                    content={filterThoughtPrefix(maskToolNames(messages[shareModalIdx]?.content.replace(/【推荐问题】([\s\S]*?)(?:$|\n{2,}|【|\[)/, '').trim() || ''))}
+                />
+            )}
+            {/* 在UI中显示重试提示 */}
+            {retrying && (
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-theme-primary text-white px-4 py-2 rounded-full shadow-lg z-50 text-sm font-bold animate-pulse">
+                    AI连接异常，正在重试...
                 </div>
             )}
         </div>

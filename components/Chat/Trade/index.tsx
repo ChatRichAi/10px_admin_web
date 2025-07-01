@@ -22,12 +22,12 @@ const Trade = ({}: TradeProps) => (
             <div className="flex items-center min-h-[4rem] px-6 py-4 border-t border-theme-stroke md:px-4">
                 <div className="flex items-center w-22 text-base-2 text-theme-secondary">
                     <div className="shrink-0 w-3 h-3 mr-2 rounded bg-theme-green"></div>
-                    Best time
+                    最佳时间
                 </div>
                 <div className="flex items-center grow pl-6 md:pl-4">
                     <div className="text-base-2">
-                        10:31AM{" "}
-                        <span className="md:hidden"> Tue 9 Apr 2024</span>
+                        22:31{" "}
+                        <span className="md:hidden"> 2025年4月9日</span>
                     </div>
                     <button className="btn-square ml-auto rounded-full">
                         <Icon name="refresh" />
@@ -37,7 +37,7 @@ const Trade = ({}: TradeProps) => (
             <div className="flex items-center min-h-[4rem] px-6 py-4 border-t border-theme-stroke md:px-4">
                 <div className="flex items-center w-22 text-base-2 text-theme-secondary">
                     <div className="shrink-0 w-3 h-3 mr-2 rounded bg-theme-purple"></div>
-                    Buy
+                    买入
                 </div>
                 <div className="flex items-center grow pl-6 md:pl-4">
                     <div className="text-base-2">ETH</div>
@@ -49,7 +49,7 @@ const Trade = ({}: TradeProps) => (
             <div className="flex items-center min-h-[4rem] px-6 py-4 border-t border-theme-stroke md:px-4">
                 <div className="flex items-center w-22 text-base-2 text-theme-secondary">
                     <div className="shrink-0 w-3 h-3 mr-2 rounded bg-theme-brand"></div>
-                    Target
+                    目标
                 </div>
                 <div className="flex items-center grow pl-6 md:pl-4">
                     <div className="text-base-2">+10%</div>
@@ -58,7 +58,7 @@ const Trade = ({}: TradeProps) => (
             <div className="flex items-center min-h-[4rem] px-6 py-4 border-t border-theme-stroke md:px-4">
                 <div className="flex items-center w-22 text-base-2 text-theme-secondary">
                     <div className="shrink-0 w-3 h-3 mr-2 rounded bg-theme-yellow"></div>
-                    Estimate
+                    预估
                 </div>
                 <div className="flex items-center grow pl-6 md:pl-4">
                     <div className="text-base-2 md:hidden">
@@ -71,10 +71,10 @@ const Trade = ({}: TradeProps) => (
         </div>
         <div className="flex p-6 space-x-4 md:block md:space-x-0 md:space-y-4 md:px-4">
             <button className="btn-gray flex-1 px-4 md:w-full">
-                Re-generate
+                重新生成
             </button>
             <button className="btn-secondary flex-1 px-4 md:w-full">
-                Set smart trade
+                设置智能交易
             </button>
         </div>
     </div>

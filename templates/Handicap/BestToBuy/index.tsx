@@ -20,15 +20,29 @@ const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
         return (
-            <div className="custom-tooltip bg-white bg-opacity-80 p-2 rounded-lg shadow-md">
-                <p className="text-sm text-gray-700">{data.date}</p>
-                <p className="text-sm text-gray-700">{`Price: ${data.price}`}</p>
-                {data.tdResistance && <p className="text-sm text-gray-700">{`R1: ${data.tdResistance}`}</p>}
-                {data.tdSupport && <p className="text-sm text-gray-700">{`S1: ${data.tdSupport}`}</p>}
+            <div className="bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 border border-gray-300 dark:border-gray-600 rounded-lg p-3 shadow-lg">
+                <p className="text-gray-700 dark:text-white text-sm font-semibold mb-2">{data.date}</p>
+                <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-4">
+                        <span className="text-xs text-gray-500 dark:text-gray-300">价格:</span>
+                        <span className="text-xs text-gray-700 dark:text-white font-medium">{data.price}</span>
+                    </div>
+                    {data.tdResistance && (
+                        <div className="flex items-center justify-between gap-4">
+                            <span className="text-xs text-gray-500 dark:text-gray-300">R1:</span>
+                            <span className="text-xs text-gray-700 dark:text-white font-medium">{data.tdResistance}</span>
+                        </div>
+                    )}
+                    {data.tdSupport && (
+                        <div className="flex items-center justify-between gap-4">
+                            <span className="text-xs text-gray-500 dark:text-gray-300">S1:</span>
+                            <span className="text-xs text-gray-700 dark:text-white font-medium">{data.tdSupport}</span>
+                        </div>
+                    )}
+                </div>
             </div>
         );
     }
-
     return null;
 };
 
@@ -110,28 +124,20 @@ const BestToBuy = ({ symbol }: BestToBuyProps) => {
                     </div>
                 }
             >
-                <div className="pt-6">
+                <div>
                     <CurrencyFormat
-                        className="mb-3 text-h3"
+                        className="mb-2 text-h3"
                         value={price}
                         currency="$"
                     />
                     <div className="flex items-center">
-                        <div className="mr-2">
-                            {/* <Image
-                                className="w-6"
-                                src="/images/crypto-icon-gray-3.png"
-                                width={24}
-                                height={24}
-                                alt=""
-                            /> */}
-                        </div>
+                        <div className="mr-2"></div>
                         <div className="text-base-1s">
                             {displayName}{symbolType === 'crypto' ? <span className="text-theme-tertiary"> {displaySymbol}</span> : null}
                         </div>
                         <Percent className="ml-2 text-base-2" value={percentChange} />
                     </div>
-                    <div className="h-48 my-2 -mx-6 md:-mx-4">
+                    <div className="h-48">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart
                                 data={historicalData}
@@ -220,7 +226,7 @@ const BestToBuy = ({ symbol }: BestToBuyProps) => {
                             1W
                         </button>
                     </div>
-                    <div className="flex items-center justify-center mb-4 text-caption-1 text-theme-secondary md:mb-6">
+                    <div className="flex items-center justify-center text-caption-1 text-theme-secondary mb-4">
                         <div className="mr-2">
                             <Image
                                 className="w-4"
