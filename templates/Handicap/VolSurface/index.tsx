@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import Card from "@/components/Card";
 import dynamic from "next/dynamic";
 import { useVolSurfaceData } from "@/components/useVolSurfaceData";
-import 'echarts-gl';
+import Plot from 'react-plotly.js';
+import { useColorMode } from "@chakra-ui/react";
 
 const ReactECharts = dynamic(() => import("echarts-for-react"), { ssr: false });
 
@@ -31,6 +32,10 @@ const VolSurface = ({ className }: { className?: string }) => {
   
   // 使用自定义Hook获取数据
   const { data, loading, error, fetchData, refresh } = useVolSurfaceData(symbol, true, 5 * 60 * 1000);
+  const { colorMode } = useColorMode();
+  const isDark = colorMode === "dark";
+  const axisColor = isDark ? "#fff" : "#222";
+  const gridColor = isDark ? "#444" : "#e5e7eb";
 
   // 如果没有数据，显示加载状态
   if (!data) {
@@ -46,101 +51,10 @@ const VolSurface = ({ className }: { className?: string }) => {
     );
   }
 
-  const customTooltip = (params: any) => {
-    if (!params || !params.value) return '';
-    const [xIdx, yIdx, z] = params.value;
-    const expiry = data.xAxis[xIdx];
-    const delta = data.yAxis[yIdx];
-    const color = '#3b82f6';
-    return `
-      <div style="background:rgba(23,23,30,0.25);backdrop-filter:blur(8px);border-radius:16px;box-shadow:0 4px 24px 0 rgba(0,0,0,0.12);padding:16px;min-width:160px;color:#fff;">
-        <div style="font-size:16px;font-weight:bold;margin-bottom:8px;">Vol Surface Pointer</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <span style="display:inline-block;width:12px;height:12px;border-radius:6px;background:${color};"></span>
-        </div>
-        <div style="font-size:14px;line-height:1.7;">
-          - Expiry: <span style='color:#fff;'>${expiry}</span><br/>
-          - Delta: <span style='color:#fff;'>${delta}</span><br/>
-          - Volatility: <span style='color:#fff;'>${z !== null ? parseFloat(z).toFixed(2) : 'N/A'}%</span>
-        </div>
-      </div>
-    `;
-  };
-
-  // 计算波动率范围用于颜色映射（过滤掉null值）
-  const validValues = data.zData.flat().filter((val): val is number => val !== null);
-  const volMin = validValues.length > 0 ? Math.min(...validValues) : 0;
-  const volMax = validValues.length > 0 ? Math.max(...validValues) : 100;
-
-  const option = {
-    tooltip: {
-      trigger: 'item',
-      backgroundColor: 'transparent',
-      borderWidth: 0,
-      padding: 0,
-      extraCssText: 'box-shadow:none;',
-      formatter: customTooltip,
-    },
-    visualMap: {
-      show: false,
-      min: volMin,
-      max: volMax,
-      inRange: {
-        color: ['#3b82f6', '#fbbf24', '#ef4444'],
-      },
-    },
-    xAxis3D: {
-      type: 'category',
-      name: '到期日',
-      data: data.xAxis,
-      nameTextStyle: { color: '#6F767E', fontSize: 12 },
-      axisLabel: { color: '#6F767E', fontSize: 12 },
-    },
-    yAxis3D: {
-      type: 'category',
-      name: 'Delta',
-      data: data.yAxis,
-      nameTextStyle: { color: '#6F767E', fontSize: 12 },
-      axisLabel: { color: '#6F767E', fontSize: 12 },
-    },
-    zAxis3D: {
-      type: 'value',
-      name: '波动率',
-      nameTextStyle: { color: '#6F767E', fontSize: 12 },
-      axisLabel: { color: '#6F767E', fontSize: 12 },
-      min: Math.floor(volMin - 5),
-      max: Math.ceil(volMax + 5),
-    },
-    grid3D: {
-      boxWidth: 120,
-      boxDepth: 60,
-      viewControl: {
-        projection: 'perspective',
-        autoRotate: false,
-      },
-      light: {
-        main: {
-          intensity: 1.2,
-          shadow: true,
-        },
-        ambient: {
-          intensity: 0.3,
-        },
-      },
-    },
-    series: [
-      {
-        type: 'surface',
-        wireframe: { show: false },
-        data: data.zData.map((row, i) => 
-          row.map((z, j) => [i, j, z !== null ? z : 0]) // 将null值替换为0用于显示
-        ).flat(),
-        itemStyle: {
-          opacity: 0.95,
-        },
-      },
-    ],
-  };
+  // 处理zData，确保无负值和null
+  const zData = data.zData.map(row => row.map(z => z !== null && z >= 0 ? z : 0));
+  const x = data.xAxis;
+  const y = data.yAxis;
 
   return (
     <Card title="模型波动率平面" className={className}>
@@ -185,8 +99,85 @@ const VolSurface = ({ className }: { className?: string }) => {
         </div>
       )}
       
-      <div className="h-80">
-        <ReactECharts option={option} style={{ width: '100%', height: '100%' }} />
+      <div className="h-96 flex items-center justify-center">
+        <Plot
+          data={[
+            {
+              type: 'surface',
+              x: x,
+              y: y,
+              z: zData,
+              colorscale: [
+                [0, '#3b82f6'],
+                [0.5, '#fbbf24'],
+                [1, '#ef4444']
+              ],
+              showscale: false,
+              contours: { z: { show: false } },
+              hoverinfo: 'x+y+z',
+              hovertemplate: [
+                '<b>到期日</b>: %{x}<br>',
+                '<b>Delta</b>: %{y}<br>',
+                '<b>波动率</b>: %{z:.2f}%<extra></extra>'
+              ].join('')
+            }
+          ]}
+          layout={{
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { color: axisColor, family: 'inherit', size: 16 },
+            hoverlabel: {
+              bgcolor: '#23232b',
+              bordercolor: '#3b82f6',
+              font: { color: '#fff', size: 18, family: 'inherit' }
+            },
+            scene: {
+              xaxis: {
+                title: { text: '到期日', font: { color: axisColor, size: 40, family: 'inherit' } },
+                tickmode: 'array',
+                tickvals: x.filter((_, i) => i % Math.ceil(x.length / 5) === 0),
+                ticktext: x.filter((_, i) => i % Math.ceil(x.length / 5) === 0),
+                color: axisColor,
+                gridcolor: gridColor,
+                gridwidth: 2,
+                zerolinecolor: axisColor,
+                zerolinewidth: 3,
+                showbackground: false,
+                tickfont: { size: 22, color: axisColor, family: 'inherit' }
+              },
+              yaxis: {
+                title: { text: 'Delta', font: { color: axisColor, size: 40, family: 'inherit' } },
+                tickmode: 'array',
+                tickvals: y.filter((_, i) => i % Math.ceil(y.length / 3) === 0),
+                ticktext: y.filter((_, i) => i % Math.ceil(y.length / 3) === 0),
+                color: axisColor,
+                gridcolor: gridColor,
+                gridwidth: 2,
+                zerolinecolor: axisColor,
+                zerolinewidth: 3,
+                showbackground: false,
+                tickfont: { size: 22, color: axisColor, family: 'inherit' }
+              },
+              zaxis: {
+                title: { text: '波动率(%)', font: { color: axisColor, size: 40, family: 'inherit' } },
+                color: axisColor,
+                gridcolor: gridColor,
+                gridwidth: 2,
+                zerolinecolor: axisColor,
+                zerolinewidth: 3,
+                showbackground: false,
+                tickfont: { size: 22, color: axisColor, family: 'inherit' }
+              },
+              bgcolor: 'rgba(0,0,0,0)'
+            },
+            margin: { l: 0, r: 0, b: 0, t: 0 }
+          }}
+          config={{
+            displayModeBar: false,
+            responsive: true
+          }}
+          style={{ width: '90%', height: '90%' }}
+        />
       </div>
     </Card>
   );

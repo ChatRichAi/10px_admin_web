@@ -191,3 +191,38 @@
   scrollbar-width: thin;
   scrollbar-color: rgba(120,120,130,0.18) transparent;
 }
+
+/* 分享卡片专用表格样式，仅在 .share-card 下生效 */
+.share-card .ai-markdown-table th,
+.share-card .ai-markdown-table td {
+  padding: 7px 8px;
+}
+
+.share-card .ai-markdown-table th {
+  font-size: 13px;
+}
+
+.share-card .ai-markdown-table td {
+  font-size: 12.5px;
+}
+
+/* 分享卡片内容区字体优化（精简，仅保留品牌色和结构优化） */
+.share-card h1, .share-card h2, .share-card h3 {
+  font-weight: bold;
+  color: #0C68E9;
+  margin-top: 1.2em;
+  margin-bottom: 0.6em;
+}
+
+.share-card p {
+  margin: 0.7em 0;
+}
+
+.share-card ul, .share-card ol {
+  margin: 0.7em 0 0.7em 1.2em;
+}
+
+.share-card strong {
+  font-weight: 700;
+  color: #0C68E9;
+}

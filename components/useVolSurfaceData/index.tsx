@@ -46,24 +46,15 @@ const validateVolSurfaceData = (data: any): data is VolSurfaceData => {
 
 // 转换API数据格式的函数
 const transformApiData = (apiData: any): VolSurfaceData => {
-  // 将数字字符串转换为期权类型字符串
-  const convertDeltaToOptionType = (delta: string): string => {
-    const num = parseFloat(delta);
-    if (num < 0) {
-      // 负值表示看跌期权
-      return `${Math.abs(Math.round(num * 100))}P`;
-    } else {
-      // 正值表示看涨期权
-      return `${Math.round(num * 100)}C`;
-    }
-  };
+  // 如果 yAxis 已经是 ["10P", "20P", ...] 这种格式，直接用
+  const isOptionTypeFormat = Array.isArray(apiData.yAxis) && apiData.yAxis.every((item: string) => /\d+(P|C)/.test(item));
 
   return {
     xAxis: apiData.xAxis || [],
-    yAxis: apiData.yAxis ? apiData.yAxis.map(convertDeltaToOptionType) : [],
+    yAxis: isOptionTypeFormat ? apiData.yAxis : (apiData.yAxis || []),
     zData: apiData.zData || [],
     timestamp: new Date().toISOString(),
-    symbol: 'BTC'
+    symbol: apiData.symbol || 'BTC'
   };
 };
 
@@ -84,53 +75,41 @@ export const useVolSurfaceData = (
     setError(null);
 
     try {
-      console.log(`🔍 正在获取 ${targetSymbol} 的波动率平面数据...`);
-      
-      // 使用完整的API地址
-      const apiUrl = `http://103.106.191.243:8000/deribit/elements?exchange=deribit&type=vol_surface`;
-      console.log(`📡 API URL: ${apiUrl}`);
-      
+      // 直接请求新的API
+      const apiUrl = `http://103.106.191.243:8000/model_vol_surface_matrix`;
       const response = await fetch(apiUrl);
-      console.log(`📊 Response status: ${response.status}`);
-      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
       const result = await response.json();
-      console.log(`📦 API Response:`, result);
-      
-      // 转换API数据格式
-      const transformedData = transformApiData(result);
-      console.log(`🔄 Transformed data:`, transformedData);
-      
+
+      // 直接适配返回格式
+      const transformedData = {
+        xAxis: result.xAxis || [],
+        yAxis: result.yAxis || [],
+        zData: result.zData || [],
+        timestamp: new Date().toISOString(),
+        symbol: targetSymbol
+      };
+
       // 检查是否所有波动率数据都是null
-      const allNull = transformedData.zData.every(row => row.every(val => val === null));
+      const allNull = transformedData.zData.every((row: (number | null)[]) => row.every((val: number | null) => val === null));
       if (allNull) {
-        console.warn(`⚠️ 所有波动率数据都是null，可能是API数据问题`);
         setError('API返回的波动率数据为空，请检查后端数据源');
       }
-      
+
       // 验证数据格式
       if (validateVolSurfaceData(transformedData)) {
-        console.log(`✅ 数据格式验证通过`);
-        setData({
-          ...transformedData,
-          timestamp: new Date().toISOString(),
-          symbol: targetSymbol
-        });
+        setData(transformedData);
       } else {
-        console.error(`❌ 数据格式验证失败:`, transformedData);
         throw new Error('Invalid data format received from API');
       }
     } catch (err) {
-      console.error('❌ Error fetching vol surface data:', err);
       const errorMessage = err instanceof Error ? err.message : '获取数据失败';
       setError(errorMessage);
 
       // 如果API失败，使用默认数据
       if (!data) {
-        console.log(`🔄 使用默认数据作为后备`);
         setData({
           ...defaultData,
           symbol: targetSymbol

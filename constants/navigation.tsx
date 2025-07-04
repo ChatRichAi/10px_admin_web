@@ -7,7 +7,7 @@ export const navigation = [
     },
     {
         id: "1",
-        title: "股性罗盘",
+        title: "期权罗盘",
         icon: "trade",
         url: "/handicap",
     },

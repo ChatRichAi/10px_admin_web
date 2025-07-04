@@ -484,7 +484,7 @@ const Chat = ({ children }: ChatProps) => {
                 <div className="flex flex-col items-center">
                     <div
                         ref={cardRef}
-                        className="w-full max-w-[375px] bg-white dark:bg-[#23272f] rounded-2xl shadow-lg p-0 relative flex flex-col"
+                        className="share-card w-full max-w-[375px] bg-white dark:bg-[#23272f] rounded-2xl shadow-lg p-0 relative flex flex-col"
                         style={{ fontFamily: 'inherit', minHeight: 320 }}
                     >
                         {/* 海报头图 */}
@@ -505,7 +505,7 @@ const Chat = ({ children }: ChatProps) => {
                             <span className="ml-auto text-xs text-theme-tertiary">{new Date().toLocaleString()}</span>
                         </div>
                         {/* AI回复内容（美化Markdown） */}
-                        <div className="text-base text-theme-primary break-words px-6 pb-4 leading-relaxed flex-1">
+                        <div className="text-body-1m text-theme-primary break-words px-6 pb-4 leading-relaxed flex-1">
                             <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
                                 components={{
@@ -880,19 +880,40 @@ function maskToolNames(text: string) {
     // 再替换敏感方法名
     result = result.replace(
         /(kline_get|get_kline|option_chain_get|get_option_chain|yahoo_finance_news|get_news_sentiment|quote_get|get_quote|financial_summary_get|get_financial_summary|news_sentiment|get_news_sentiment|symbol='[A-Z]+'|interval='[a-z0-9]+'|参数：.*?')/gi,
-        "<img src='/favicon.ico' style='width:1em;height:1em;vertical-align:-0.15em;display:inline'/>10px"
+        "10px"
     );
     return result;
 }
 
 // 过滤Thought/Thinking/思考中等前缀和相关内容
 function filterThoughtPrefix(text: string) {
-    return text
+    // 1. 先移除所有 <details>...</details>、[THINK]...[/THINK] 及常见思考/分析/推理前缀段落
+    // 2. 再移除常见英文/中文前缀
+    // 3. 再移除开头分隔符、标签等
+    let result = text;
+    // 移除 <details>...</details>
+    result = result.replace(/<details[\s\S]*?<summary>[\s\S]*?<\/summary>[\s\S]*?<\/details>/gi, '');
+    // 移除 [THINK]...[/THINK]
+    result = result.replace(/\[THINK\][\s\S]*?\[\/THINK\]/gi, '');
+    // 移除常见思考/分析/推理/流程/步骤等前缀段落（支持多行、冒号、点号、换行等）
+    const flowPrefixRegex = /^(\s*(Thought:?|Thinking:?|分析流程|推理过程|思考过程|分析步骤|推理步骤|思考步骤|分析思路|推理思路|分析|推理|思考|流程|步骤|首先|需要先|请先|优先|失败则|如需|如果.*?，|需先|务必|务必先|务必首先|务必需要|务必请先|务必优先|务必失败则|务必如需|务必如果.*?，)[：:.。\n\r\-\s]*[\s\S]*?)(?=\n{2,}|$)/i;
+    let found = true;
+    while (found) {
+        const flowMatch = result.match(flowPrefixRegex);
+        if (flowMatch) {
+            result = result.replace(flowPrefixRegex, '').trim();
+        } else {
+            found = false;
+        }
+    }
+    // 移除常见英文/中文前缀
+    result = result
         .replace(/^(Thought:?|Thinking:?|Thinking\s*\.*|思考中:?|思考中\s*\.*)/i, '')
         .replace(/^\s*[:：.。]+/, '') // 去除多余的冒号、点号
         .replace(/^(\[.*?\])?\s*/i, '') // 去除如[THINK]等标签
         .replace(/^(\*|—|——|\-|\.)+/, '') // 去除开头的分隔符
         .trim();
+    return result;
 }
 
 export default Chat;
