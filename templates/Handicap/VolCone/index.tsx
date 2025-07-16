@@ -188,7 +188,7 @@ const VolCone = ({ className }: { className?: string }) => {
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 16, right: 24, left: 0, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(111,118,126,0.3)" />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(111, 118, 126, 0.09)" />
               <XAxis dataKey="term" tick={{ fontSize: 12, fill: '#6F767E' }} />
               <YAxis tick={{ fontSize: 12, fill: '#6F767E' }} domain={[0, 'dataMax + 10']} unit="%" />
               <Tooltip content={CustomTooltip} />

@@ -17,6 +17,7 @@ import HistoricalIVFixedExpiry from "./HistoricalIVFixedExpiry";
 import VolumeByStrike from "./VolumeByStrike";
 import OptionVolumeRatio from "./OptionVolumeRatio";
 import OptionOpenInterest from "./OptionOpenInterest";
+import GammaDistribution from "./GammaDistribution";
 
 const HandicapPageContent = () => {
     const { symbol } = useSymbolContext();
@@ -65,6 +66,9 @@ const HandicapPageContent = () => {
                 </div>
                 <div className="flex lg:block gap-1.5 mt-3">
                     <OptionOpenInterest className="flex-1 min-w-0" />
+                </div>
+                <div className="flex lg:block gap-1.5 mt-3">
+                    <GammaDistribution className="flex-1 min-w-0" />
                 </div>
             </div>
         </Layout>

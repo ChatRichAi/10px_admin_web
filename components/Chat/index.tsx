@@ -17,6 +17,16 @@ import rehypeRaw from "rehype-raw";
 import html2canvas from "html2canvas";
 import Modal from "@/components/Modal";
 import remarkGfm from "remark-gfm";
+import Stepper from '@mui/material/Stepper';
+import Step from '@mui/material/Step';
+import StepLabel from '@mui/material/StepLabel';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import { StepIconProps } from '@mui/material/StepIcon';
+import Button from '@mui/material/Button';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import DownloadIcon from '@mui/icons-material/Download';
+import ShareIcon from '@mui/icons-material/Share';
+import Snackbar from '@mui/material/Snackbar';
 
 const modes = [
     {
@@ -85,6 +95,7 @@ const Chat = ({ children }: ChatProps) => {
     const [shareModalIdx, setShareModalIdx] = useState<number | null>(null);
     const MAX_RETRY = 2;
     const [retrying, setRetrying] = useState(false);
+    const [snackbarOpen, setSnackbarOpen] = useState(false);
 
     // 当前会话
     const currentSession = sessions.find((s: Session) => s.id === currentSessionId);
@@ -281,7 +292,7 @@ const Chat = ({ children }: ChatProps) => {
                 };
             }));
             // 新增：保存推荐问题
-            setSuggestions(reply.suggestions || []);
+            setSuggestions((reply.suggestions || []).slice(0, 3));
                 setLoading(false);
                 setRetrying(false);
                 abortControllerRef.current = null;
@@ -421,7 +432,7 @@ const Chat = ({ children }: ChatProps) => {
                     const newSuggestions = suggestBlock.split(/\n|\r/)
                         .map(line => line.replace(/^\d+\.\s*/, '').trim())
                         .filter(line => line && !/^【/.test(line));
-                    setSuggestions(newSuggestions);
+                    setSuggestions(newSuggestions.slice(0, 3));
                 } else {
                     setSuggestions([]);
                 }
@@ -479,35 +490,55 @@ const Chat = ({ children }: ChatProps) => {
             link.click();
         };
 
+        // 分享功能，默认复制图片到剪贴板
+        const handleShare = async () => {
+            if (!cardRef.current) return;
+            setSaving(true);
+            const canvas = await html2canvas(cardRef.current, { backgroundColor: null, useCORS: true, scale: 2 });
+            setSaving(false);
+            canvas.toBlob(blob => {
+                if (blob) {
+                    const item = new window.ClipboardItem({ 'image/png': blob });
+                    navigator.clipboard.write([item]).then(() => {
+                        setSnackbarOpen(true); // 复制成功后弹出提示
+                        setTimeout(() => setSnackbarOpen(false), 2000);
+                    });
+                }
+            });
+        };
+
         return (
             <Modal visible={visible} onClose={onClose} classWrap="max-w-[26rem] w-full p-0 bg-transparent border-none shadow-none">
                 <div className="flex flex-col items-center">
                     <div
                         ref={cardRef}
                         className="share-card w-full max-w-[375px] bg-white dark:bg-[#23272f] rounded-2xl shadow-lg p-0 relative flex flex-col"
-                        style={{ fontFamily: 'inherit', minHeight: 320 }}
+                        style={{ fontFamily: 'inherit', minHeight: 320, position: 'relative' }}
                     >
                         {/* 海报头图 */}
                         <img src="/images/bg-upgrade.jpg" alt="海报头图" className="w-full h-28 object-cover rounded-t-2xl" style={{ borderTopLeftRadius: 16, borderTopRightRadius: 16 }} />
                         {/* 品牌区 */}
                         <div className="flex items-center mb-4 px-6 mt-2">
-                            <img
-                                src="/favicon.ico"
-                                alt="logo"
-                                style={{
-                                    width: 28,
-                                    height: 28,
-                                    marginRight: 8,
-                                    display: 'block',
-                                }}
-                            />
-                            <span className="text-lg font-bold text-[#0C68E9]">10px AI</span>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <img
+                                    src="/images/logo-1.svg"
+                                    alt="logo"
+                                    style={{
+                                        width: 20,
+                                        height: 20,
+                                        display: 'inline-block',
+                                        verticalAlign: 'middle'
+                                    }}
+                                />
+                                <span style={{ fontWeight: 700, fontSize: 20, color: '#0C68E9', lineHeight: 1 }}>10px AI</span>
+                            </span>
                             <span className="ml-auto text-xs text-theme-tertiary">{new Date().toLocaleString()}</span>
                         </div>
                         {/* AI回复内容（美化Markdown） */}
                         <div className="text-body-1m text-theme-primary break-words px-6 pb-4 leading-relaxed flex-1">
                             <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
+                                rehypePlugins={[rehypeRaw]}
                                 components={{
                                     h1: ({node, ...props}) => <h1 className="text-xl font-bold my-3" {...props} />,
                                     h2: ({node, ...props}) => <h2 className="text-lg font-bold my-2" {...props} />,
@@ -526,21 +557,76 @@ const Chat = ({ children }: ChatProps) => {
                         </div>
                         {/* 品牌标识放在卡片内容区底部 */}
                         <div className="flex justify-center items-center pb-4 pt-2 text-xs text-[#0C68E9] opacity-80 select-none pointer-events-none font-bold">
-                            <img src="/favicon.ico" alt="logo" style={{ width: 18, height: 18, display: 'inline', verticalAlign: '-0.3em', marginRight: 4 }} />10px AI
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <img src="/images/logo-1.svg" alt="logo" style={{ width: 20, height: 20, display: 'inline-block', verticalAlign: 'middle' }} />
+                                <span style={{ fontWeight: 700, fontSize: 20, color: '#0C68E9', lineHeight: 1 }}>10px AI</span>
+                            </span>
                         </div>
+                        {snackbarOpen && (
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    left: '50%',
+                                    top: '50%',
+                                    transform: 'translate(-50%, -50%)',
+                                    background: 'rgba(34,34,34,0.92)',
+                                    color: '#fff',
+                                    padding: '16px 32px',
+                                    borderRadius: 8,
+                                    fontWeight: 700,
+                                    fontSize: 18,
+                                    zIndex: 99,
+                                    pointerEvents: 'none',
+                                    minWidth: 200,
+                                    textAlign: 'center',
+                                    boxShadow: '0 4px 24px rgba(0,0,0,0.18)'
+                                }}
+                            >
+                                已复制到剪贴板
+                            </div>
+                        )}
                     </div>
-                    <button
-                        className={
-                            "mt-6 px-6 py-2 rounded-full font-bold text-base shadow transition " +
-                            (isDark
-                                ? "bg-white text-[#0C68E9] hover:bg-theme-brand hover:text-white"
-                                : "bg-theme-primary text-white hover:bg-theme-brand")
-                        }
-                        onClick={handleSave}
-                        disabled={saving}
-                    >
-                        {saving ? '保存中...' : '保存图片'}
-                    </button>
+                    {/* 新增复制和下载按钮 */}
+                    <div className="flex justify-center gap-4 mt-4">
+                        <Button
+                            variant="contained"
+                            startIcon={<ShareIcon />}
+                            onClick={handleShare}
+                            sx={{
+                                borderRadius: '999px',
+                                minWidth: 120,
+                                fontWeight: 700,
+                                boxShadow: 'none',
+                                background: '#222',
+                                color: '#fff',
+                                '&:hover': {
+                                    background: '#111',
+                                    color: '#fff',
+                                },
+                            }}
+                        >
+                            分享
+                        </Button>
+                        <Button
+                            variant="contained"
+                            startIcon={<DownloadIcon />}
+                            onClick={handleSave}
+                            sx={{
+                                borderRadius: '999px',
+                                minWidth: 120,
+                                fontWeight: 700,
+                                boxShadow: 'none',
+                                background: '#222',
+                                color: '#fff',
+                                '&:hover': {
+                                    background: '#111',
+                                    color: '#fff',
+                                },
+                            }}
+                        >
+                            下载
+                        </Button>
+                    </div>
                 </div>
             </Modal>
         );
@@ -665,9 +751,11 @@ const Chat = ({ children }: ChatProps) => {
                                     if (!msg.content) return null;
                                     // 判断AI回复是否已完成（即后面有assistant消息且有内容）
                                     const hasFinalAfter = messages.slice(idx + 1).some(m => m.role === 'assistant' && m.content && m.content.trim());
-                                    return <CollapsibleThinkingBubble key={idx} content={msg.content} openDefault={!hasFinalAfter} forceCollapseKey={hasFinalAfter ? idx : undefined} />;
+                                    return <CollapsibleThinkingBubble key={idx} openDefault={!hasFinalAfter} forceCollapseKey={hasFinalAfter ? idx : undefined} />;
                                 } else if (msg.role === 'assistant') {
                                     if (!msg.content) return null;
+                                    // 过滤推理/思考/流程等前缀内容，只保留最终答案
+                                    const cleanContent = filterThoughtPrefix(msg.content);
                                     return (
                                         <div
                                             key={idx}
@@ -675,7 +763,7 @@ const Chat = ({ children }: ChatProps) => {
                                             data-ai-reply-idx={idx}
                                             className={isMobile ? 'bg-white rounded-2xl shadow-md px-4 py-3 my-3' : ''}
                                         >
-                                            <Answer content={filterThoughtPrefix(maskToolNames(msg.content.replace(/【推荐问题】([\s\S]*?)(?:$|\n{2,}|【|\[)/, '').trim()))} />
+                                            <Answer content={mermaidToTable(maskToolNames(cleanContent.replace(/【推荐问题】([\s\S]*?)(?:$|\n{2,}|【|\[)/, '').trim()))} />
                                             {/* 分享按钮 */}
                                             <button
                                                 onClick={() => setShareModalIdx(idx)}
@@ -691,7 +779,7 @@ const Chat = ({ children }: ChatProps) => {
                                             </button>
                                             {/* 复制icon按钮 */}
                                             <button
-                                                onClick={() => navigator.clipboard.writeText(stripHtmlTags(msg.content))}
+                                                onClick={() => navigator.clipboard.writeText(stripHtmlTags(cleanContent))}
                                                 className="absolute right-2 bottom-2 w-5 h-5 flex items-center justify-center p-0 m-0 border-none bg-transparent hover:text-theme-primary text-theme-secondary dark:text-theme-tertiary transition"
                                                 title="复制回复"
                                                 style={{ zIndex: 10 }}
@@ -709,7 +797,7 @@ const Chat = ({ children }: ChatProps) => {
                                                 >
                                                     <div className="mb-2 font-semibold text-theme-secondary">【推荐问题】</div>
                                                     <div className={isMobile ? 'flex flex-col gap-2' : 'flex flex-wrap gap-2'}>
-                                                        {suggestions.map((s, i) => (
+                                                        {suggestions.slice(0, 3).map((s, i) => (
                                                             <button
                                                                 key={s}
                                                                 onClick={() => setMessage(stripHtmlTags(s))}
@@ -782,7 +870,7 @@ const Chat = ({ children }: ChatProps) => {
                 <CardShareModal
                     visible={shareModalIdx !== null}
                     onClose={() => setShareModalIdx(null)}
-                    content={filterThoughtPrefix(maskToolNames(messages[shareModalIdx]?.content.replace(/【推荐问题】([\s\S]*?)(?:$|\n{2,}|【|\[)/, '').trim() || ''))}
+                    content={mermaidToTable(filterThoughtPrefix(maskToolNames(messages[shareModalIdx]?.content.replace(/【推荐问题】([\s\S]*?)(?:$|\n{2,}|【|\[)/, '').trim() || '')))}
                 />
             )}
             {/* 在UI中显示重试提示 */}
@@ -796,10 +884,72 @@ const Chat = ({ children }: ChatProps) => {
 };
 
 // CollapsibleThinkingBubble支持外部控制折叠状态
-function CollapsibleThinkingBubble({ content, openDefault, forceCollapseKey }: { content: string; openDefault?: boolean; forceCollapseKey?: any }) {
+function CollapsibleThinkingBubble({ openDefault, forceCollapseKey }: { openDefault?: boolean; forceCollapseKey?: any }) {
     const [open, setOpen] = useState(openDefault || false);
     const { colorMode } = useColorMode();
     const isDark = colorMode === "dark";
+    // 步骤条内容
+    const steps = ['问题分析完成', '挖掘相关数据', '总结答案', '分析完成'];
+    const [activeStep, setActiveStep] = useState(0);
+    const [done, setDone] = useState(false);
+
+    // 动态高亮步骤
+    useEffect(() => {
+      if (done) return;
+      const timer = setInterval(() => {
+        setActiveStep((prev) => {
+          if (prev < steps.length - 1) return prev + 1;
+          setDone(true);
+          clearInterval(timer);
+          return prev;
+        });
+      }, 1200);
+      return () => clearInterval(timer);
+    }, [done]);
+
+    function CustomStepIcon(props: any) {
+      const { icon, active, completed } = props;
+      if (completed) {
+        return <CheckCircleIcon sx={{ color: '#222', fontSize: 24 }} />;
+      }
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            background: active ? '#0C68E9' : '#bbb',
+            color: '#fff',
+            fontWeight: 700,
+            fontSize: 18,
+            border: active ? '2px solid #0C68E9' : 'none',
+            position: 'relative'
+          }}
+        >
+          {icon}
+          {active && !done && (
+            <span
+              style={{
+                position: 'absolute',
+                left: -6, top: -6, right: -6, bottom: -6,
+                border: '2px solid #0C68E9',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                borderTop: '2px solid transparent',
+                zIndex: 1
+              }}
+            />
+          )}
+          <style>
+            {`@keyframes spin { 100% { transform: rotate(360deg); } }`}
+          </style>
+        </span>
+      );
+    }
+
     // 当forceCollapseKey变化时自动折叠
     useEffect(() => {
         if (forceCollapseKey !== undefined) setOpen(false);
@@ -831,22 +981,38 @@ function CollapsibleThinkingBubble({ content, openDefault, forceCollapseKey }: {
                 >
                     ▶
                 </span>
-                <b>AI 思考（点击展开/收起）</b>
+                <b>AI 分析进度（点击展开/收起）</b>
             </div>
             {open && (
-                <div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
-                    <ReactMarkdown
-                        components={{
-                            code(props: any) {
-                                const {inline, className, children} = props;
-                                const match = /language-(\w+)/.exec(className || '');
-                                if (!inline && match && match[1] === 'mermaid') {
-                                    return <Mermaid chart={String(children)} />;
-                                }
-                                return <code className={className} {...props}>{children}</code>;
-                            }
+                <div style={{ marginTop: 8 }}>
+                    <Stepper
+                        activeStep={activeStep}
+                        orientation="vertical"
+                        sx={{
+                            '.MuiStepIcon-root': {
+                                color: '#bbb',
+                            },
+                            '.MuiStepIcon-text': {
+                                fill: '#fff',
+                            },
+                            '.MuiStepLabel-label': {
+                                color: '#222',
+                                fontWeight: 800,
+                            },
+                            '.Mui-completed .MuiStepIcon-root': {
+                                color: '#bbb',
+                            },
+                            '.Mui-active .MuiStepIcon-root': {
+                                color: '#bbb',
+                            },
                         }}
-                    >{filterThoughtPrefix(maskToolNames(content))}</ReactMarkdown>
+                    >
+                        {steps.map((label, index) => (
+                            <Step key={label} completed={index < activeStep || done}>
+                                <StepLabel StepIconComponent={CustomStepIcon}>{label}</StepLabel>
+                            </Step>
+                        ))}
+                    </Stepper>
                 </div>
             )}
         </div>
@@ -895,6 +1061,8 @@ function filterThoughtPrefix(text: string) {
     result = result.replace(/<details[\s\S]*?<summary>[\s\S]*?<\/summary>[\s\S]*?<\/details>/gi, '');
     // 移除 [THINK]...[/THINK]
     result = result.replace(/\[THINK\][\s\S]*?\[\/THINK\]/gi, '');
+    // 移除所有以Thought:、思考:、推理:等开头的段落（包括多行）
+    result = result.replace(/(^|\n)+(Thought:?|Thinking:?|思考:?|推理:?|分析:?|步骤:?|流程:?)[^\n]*((\n+[^\n]*)*)/gi, '');
     // 移除常见思考/分析/推理/流程/步骤等前缀段落（支持多行、冒号、点号、换行等）
     const flowPrefixRegex = /^(\s*(Thought:?|Thinking:?|分析流程|推理过程|思考过程|分析步骤|推理步骤|思考步骤|分析思路|推理思路|分析|推理|思考|流程|步骤|首先|需要先|请先|优先|失败则|如需|如果.*?，|需先|务必|务必先|务必首先|务必需要|务必请先|务必优先|务必失败则|务必如需|务必如果.*?，)[：:.。\n\r\-\s]*[\s\S]*?)(?=\n{2,}|$)/i;
     let found = true;
@@ -913,7 +1081,65 @@ function filterThoughtPrefix(text: string) {
         .replace(/^(\[.*?\])?\s*/i, '') // 去除如[THINK]等标签
         .replace(/^(\*|—|——|\-|\.)+/, '') // 去除开头的分隔符
         .trim();
+    // 彻底移除所有残留的Thought/思考/推理等行
+    result = result.replace(/(^|\n)+(Thought:?|Thinking:?|思考:?|推理:?|分析:?|步骤:?|流程:?)[^\n]*/gi, '');
     return result;
+}
+
+// 工具函数：将Mermaid流程图内容自动转换为表格Markdown
+function mermaidToTable(md: string): string {
+    // 处理graph LR/TD结构的简单流程图
+    const mermaidRegex = /```mermaid\s+graph [LT]R([\s\S]*?)```/gi;
+    md = md.replace(mermaidRegex, (match, graphBody) => {
+        // 简单解析节点和连线
+        // 例：A[当前状态 52%] --> B{关键变量}\nB -->|放量突破$170| C[成功概率→80%<br>目标$182🎯]\nB -->|量能持续萎缩| D[失败概率→70%<br>回踩$158⚠️]
+        const lines = graphBody.trim().split(/\n|\r/).map((l: string) => l.trim()).filter(Boolean);
+        const rows: any[] = [];
+        lines.forEach((line: string) => {
+            // 只处理 A -->|条件| B[内容] 或 A --> B[内容]
+            const m = line.match(/([A-Za-z0-9_]+)\s*-->(?:\|(.*?)\|)?\s*([A-Za-z0-9_]+)\[(.*?)\]/);
+            if (m) {
+                const from = m[1];
+                const condition = m[2] || '';
+                const to = m[3];
+                const content = m[4].replace(/<br\s*\/?>(\s*)?/gi, ' ');
+                rows.push({ from, condition, to, content });
+            }
+        });
+        // 生成表格Markdown
+        if (rows.length === 0) return '';
+        let table = '| 起点 | 条件 | 结果 | 说明 |\n|------|------|------|------|\n';
+        rows.forEach(r => {
+            table += `| ${r.from} | ${r.condition || '-'} | ${r.to} | ${r.content} |\n`;
+        });
+        return table;
+    });
+    // 新增：处理pie饼图
+    const pieRegex = /```mermaid\s+pie([\s\S]*?)```/gi;
+    md = md.replace(pieRegex, (match, pieBody) => {
+        const lines = pieBody.trim().split(/\n|\r/).map((l: string) => l.trim()).filter(Boolean);
+        let title = '对比表';
+        const dataRows: { name: string, percent: string, value: string }[] = [];
+        lines.forEach((line: string) => {
+            if (line.startsWith('title')) {
+                title = line.replace(/^title\s*/, '').trim();
+            } else {
+                // 匹配 “SOFI ： +8.3%” : 50 或 "SOFI ： +8.3%" : 50
+                const m = line.match(/[“\"](.+)[”\"]\s*:\s*(\d+)/);
+                if (m) {
+                    const [name, percent] = m[1].split('：').map(s => s.trim());
+                    dataRows.push({ name: name || m[1], percent: percent || '', value: m[2] });
+                }
+            }
+        });
+        if (dataRows.length === 0) return '';
+        let table = `**${title}**\n\n| 项目 | 净利率 | 占比 |\n|------|--------|------|\n`;
+        dataRows.forEach(row => {
+            table += `| ${row.name} | ${row.percent} | ${row.value} |\n`;
+        });
+        return table;
+    });
+    return md;
 }
 
 export default Chat;

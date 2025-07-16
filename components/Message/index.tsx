@@ -3,6 +3,7 @@ import { useColorMode } from "@chakra-ui/react";
 import TextareaAutosize from "react-textarea-autosize";
 import Icon from "@/components/Icon";
 import Image from "@/components/Image";
+import CircularProgress from '@mui/material/CircularProgress';
 
 type MessageProps = {
     className?: string;
@@ -71,11 +72,11 @@ const Message = ({
             />
             {loading ? (
                 <button
-                    className="shrink-0 w-10 h-10 ml-6 rounded-full bg-theme-brand transition-colors hover:bg-primary-1/90 md:ml-3"
+                    className="shrink-0 w-10 h-10 ml-6 rounded-full bg-theme-brand transition-colors hover:bg-primary-1/90 md:ml-3 flex items-center justify-center"
                     onClick={onPause}
                     title="暂停"
                 >
-                    <Icon className="fill-theme-white-fixed" name="pause" />
+                    <CircularProgress size={18} sx={{ color: '#fff' }} />
                 </button>
             ) : (
             <button

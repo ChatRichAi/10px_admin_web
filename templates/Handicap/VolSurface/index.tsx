@@ -56,6 +56,53 @@ const VolSurface = ({ className }: { className?: string }) => {
   const x = data.xAxis;
   const y = data.yAxis;
 
+  // 计算极值点
+  let max = -Infinity, min = Infinity, maxPos = [0, 0], minPos = [0, 0];
+  zData.forEach((row, i) => {
+    row.forEach((z, j) => {
+      if (z > max) { max = z; maxPos = [i, j]; }
+      if (z < min) { min = z; minPos = [i, j]; }
+    });
+  });
+
+  const themeMaxColor = 'rgba(59,130,246,0.7)'; // 主题蓝，半透明
+  const themeMinColor = 'rgba(251,191,36,0.7)'; // 主题橙，半透明
+
+  const extremePoints = [
+    {
+      type: 'scatter3d',
+      mode: 'markers',
+      x: [x[maxPos[0]]],
+      y: [y[maxPos[1]]],
+      z: [max],
+      marker: {
+        color: 'rgba(0,0,0,0)', // 完全透明无色
+        size: 11,
+        opacity: 0, // marker本体完全透明
+        line: { color: '#3b82f6', width: 2 } // 仅保留主题色边框
+      },
+      name: 'MAX',
+      showlegend: false,
+      hoverinfo: 'x+y+z'
+    },
+    {
+      type: 'scatter3d',
+      mode: 'markers',
+      x: [x[minPos[0]]],
+      y: [y[minPos[1]]],
+      z: [min],
+      marker: {
+        color: 'rgba(0,0,0,0)', // 完全透明无色
+        size: 11,
+        opacity: 0, // marker本体完全透明
+        line: { color: '#fbbf24', width: 2 } // 仅保留主题色边框
+      },
+      name: 'MIN',
+      showlegend: false,
+      hoverinfo: 'x+y+z'
+    }
+  ];
+
   return (
     <Card title="模型波动率平面" className={className}>
       <div className="mb-2 flex items-center justify-between">
@@ -120,7 +167,8 @@ const VolSurface = ({ className }: { className?: string }) => {
                 '<b>Delta</b>: %{y}<br>',
                 '<b>波动率</b>: %{z:.2f}%<extra></extra>'
               ].join('')
-            }
+            },
+            ...extremePoints
           ]}
           layout={{
             paper_bgcolor: 'rgba(0,0,0,0)',
@@ -133,7 +181,7 @@ const VolSurface = ({ className }: { className?: string }) => {
             },
             scene: {
               xaxis: {
-                title: { text: '到期日', font: { color: axisColor, size: 40, family: 'inherit' } },
+                title: { text: '到期日', font: { color: axisColor, size: 16, family: 'inherit' } },
                 tickmode: 'array',
                 tickvals: x.filter((_, i) => i % Math.ceil(x.length / 5) === 0),
                 ticktext: x.filter((_, i) => i % Math.ceil(x.length / 5) === 0),
@@ -143,10 +191,10 @@ const VolSurface = ({ className }: { className?: string }) => {
                 zerolinecolor: axisColor,
                 zerolinewidth: 3,
                 showbackground: false,
-                tickfont: { size: 22, color: axisColor, family: 'inherit' }
+                tickfont: { size: 14, color: axisColor, family: 'inherit' }
               },
               yaxis: {
-                title: { text: 'Delta', font: { color: axisColor, size: 40, family: 'inherit' } },
+                title: { text: 'Delta', font: { color: axisColor, size: 16, family: 'inherit' } },
                 tickmode: 'array',
                 tickvals: y.filter((_, i) => i % Math.ceil(y.length / 3) === 0),
                 ticktext: y.filter((_, i) => i % Math.ceil(y.length / 3) === 0),
@@ -156,17 +204,17 @@ const VolSurface = ({ className }: { className?: string }) => {
                 zerolinecolor: axisColor,
                 zerolinewidth: 3,
                 showbackground: false,
-                tickfont: { size: 22, color: axisColor, family: 'inherit' }
+                tickfont: { size: 14, color: axisColor, family: 'inherit' }
               },
               zaxis: {
-                title: { text: '波动率(%)', font: { color: axisColor, size: 40, family: 'inherit' } },
+                title: { text: '波动率(%)', font: { color: axisColor, size: 16, family: 'inherit' } },
                 color: axisColor,
                 gridcolor: gridColor,
                 gridwidth: 2,
                 zerolinecolor: axisColor,
                 zerolinewidth: 3,
                 showbackground: false,
-                tickfont: { size: 22, color: axisColor, family: 'inherit' }
+                tickfont: { size: 14, color: axisColor, family: 'inherit' }
               },
               bgcolor: 'rgba(0,0,0,0)'
             },

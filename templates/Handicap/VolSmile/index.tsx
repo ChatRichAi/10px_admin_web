@@ -16,14 +16,13 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
       <div
-        className="border border-[#6F767E] rounded-xl shadow-lg p-4 text-xs min-w-[160px]"
+        className="bg-white bg-opacity-30 dark:bg-gray-800 dark:bg-opacity-90 border border-gray-300 dark:border-gray-600 rounded-xl shadow-lg p-4 text-xs min-w-[160px]"
         style={{
-          background: 'rgba(35, 38, 47, 0.33)',
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
         }}
       >
-        <div className="text-white text-base font-bold mb-2">Delta: {label}</div>
+        <div className="text-gray-700 dark:text-white text-base font-bold mb-2">Delta: {label}</div>
         <div className="space-y-1">
           {payload.map((item: any, idx: number) => (
             <div key={idx} className="flex items-center justify-between gap-2">
@@ -31,7 +30,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                 <span className="inline-block w-4 h-4 rounded" style={{ background: item.color }}></span>
                 <span className="font-semibold" style={{ color: item.color }}>{item.name}</span>
               </div>
-              <span className="text-white font-bold">{item.value}%</span>
+              <span className="text-gray-700 dark:text-white font-bold">{item.value}%</span>
             </div>
           ))}
         </div>
