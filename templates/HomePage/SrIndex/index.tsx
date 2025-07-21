@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Card from "@/components/Card";
-import useTechnicalIndicators from "@/components/useTid";
+import useTechnicalIndicators from "@/hooks/useTid";
 
 interface IndicatorsData {
     indicators: { [key: string]: number | null }; // 允许 null 值

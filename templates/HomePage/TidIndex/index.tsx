@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Card from "@/components/Card";
-import useTechnicalIndicators from "@/components/useTid";
+import useTechnicalIndicators from "@/hooks/useTid";
 import axios from "axios";
 import Autocomplete from '@mui/material/Autocomplete';
 import TextField from '@mui/material/TextField';

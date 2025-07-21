@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Card from "@/components/Card";
-import useTrendData from "@/components/useQsIndex";
+import useTrendData from "@/hooks/useQsIndex";
 
 const TrendBoard = () => {
     const trendData = useTrendData();

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Card from "@/components/Card";
-import { useOpenInterestData } from "@/components/useOpenInterestData";
+import { useOpenInterest } from "@/hooks/useOpenInterest";
 import {
   BarChart,
   Bar,
@@ -74,7 +74,7 @@ const OptionOpenInterest = ({ className }: { className?: string }) => {
     refresh,
     forceRefresh,
     updateSymbol
-  } = useOpenInterestData({
+  } = useOpenInterest({
     symbol: coin,
     autoRefresh: true,
     refreshInterval: 5 * 60 * 1000, // 5分钟

@@ -1,94 +1,120 @@
 'use client'
 
-import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
-import { hasPermission } from '@/lib/permissions'
-import { Permission } from '@/lib/permissions'
+import { useState, useEffect, createContext, useContext } from 'react'
+import { authAPI, userAPI } from '@/lib/api'
 
-// 基础认证钩子
-export function useAuth() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
-  
-  const user = session?.user
-  const isLoading = status === 'loading'
-  const isAuthenticated = !!session
-  
-  const signIn = () => {
-    router.push('/sign-in')
+interface User {
+  id: string
+  email: string
+  name: string
+  image?: string
+  subscription: {
+    plan: string
+    status: string
+    startDate: string
+    endDate: string
   }
-  
-  const signOut = () => {
-    router.push('/sign-out')
-  }
-  
-  return {
-    user,
-    isLoading,
-    isAuthenticated,
-    signIn,
-    signOut,
-    session,
-  }
+  permissions: string[]
+  createdAt: string
+  updatedAt: string
 }
 
-// 需要认证的钩子
-export function useRequireAuth() {
-  const { isAuthenticated, isLoading, signIn } = useAuth()
-  
+interface AuthContextType {
+  user: User | null
+  loading: boolean
+  login: (email: string, password: string) => Promise<boolean>
+  logout: () => void
+  refreshUser: () => Promise<void>
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  // 检查用户是否已登录
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      signIn()
+    checkAuth()
+  }, [])
+
+  const checkAuth = async () => {
+    try {
+      const token = localStorage.getItem('auth_token')
+      if (!token) {
+        setLoading(false)
+        return
+      }
+
+      const result = await authAPI.getCurrentUser()
+      if (result.success) {
+        setUser(result.user)
+      } else {
+        // Token 无效，清除本地存储
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('user_info')
+      }
+    } catch (error) {
+      console.error('认证检查失败:', error)
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('user_info')
+    } finally {
+      setLoading(false)
     }
-  }, [isLoading, isAuthenticated, signIn])
-  
-  return { isAuthenticated, isLoading }
+  }
+
+  const login = async (email: string, password: string): Promise<boolean> => {
+    try {
+      const result = await authAPI.login({ email, password })
+      if (result.success) {
+        localStorage.setItem('auth_token', result.token)
+        localStorage.setItem('user_info', JSON.stringify(result.user))
+        setUser(result.user)
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('登录失败:', error)
+      return false
+    }
+  }
+
+  const logout = () => {
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('user_info')
+    setUser(null)
+  }
+
+  const refreshUser = async () => {
+    try {
+      const result = await userAPI.getCurrentUser()
+      if (result.success) {
+        setUser(result.user)
+      }
+    } catch (error) {
+      console.error('刷新用户信息失败:', error)
+    }
+  }
+
+  const value = {
+    user,
+    loading,
+    login,
+    logout,
+    refreshUser,
+  }
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
-// 权限检查钩子
-export function usePermission(permission: Permission) {
-  const { user, isAuthenticated } = useAuth()
-  
-  if (!isAuthenticated || !user) {
-    return {
-      hasPermission: false,
-      isLoading: false,
-      currentPlan: null,
-    }
+export function useAuth() {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider')
   }
-  
-  const hasRequiredPermission = hasPermission(user.subscription.plan, permission)
-  
-  return {
-    hasPermission: hasRequiredPermission,
-    isLoading: false,
-    currentPlan: user.subscription.plan,
-  }
-}
-
-// 检查订阅状态
-export function useSubscription() {
-  const { user, isAuthenticated } = useAuth()
-  
-  if (!isAuthenticated || !user) {
-    return {
-      subscription: null,
-      isActive: false,
-      isPro: false,
-      isLoading: false,
-    }
-  }
-  
-  const isActive = user.subscription.status === 'active' && 
-                  new Date() <= user.subscription.endDate
-  
-  const isPro = ['standard', 'pro'].includes(user.subscription.plan)
-  
-  return {
-    subscription: user.subscription,
-    isActive,
-    isPro,
-    isLoading: false,
-  }
+  return context
 } 

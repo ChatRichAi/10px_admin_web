@@ -1,7 +1,7 @@
 import React, { useState, useEffect, memo } from 'react';
 import { Container, TextField, Button, Select, MenuItem, FormControl, InputLabel, CircularProgress, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, Grid, Chip, ToggleButton, ToggleButtonGroup, Fab, Box, Skeleton, LinearProgress } from '@mui/material';
 import RobotIcon from '@mui/icons-material/SmartToy';
-import useTradeData from '@/components/useTradeData';
+import useTradeData from '@/hooks/useTradeData';
 import { useColorMode } from "@chakra-ui/react";
 
 // 定义 TradeRow 组件的 props 类型

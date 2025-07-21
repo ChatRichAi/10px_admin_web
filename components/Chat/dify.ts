@@ -6,7 +6,19 @@ export async function fetchDifyMessage(message: string, apiKey: string, onMessag
   const promptWithSuggest = `${message}\n\n请在回答后额外给出3个用户可能会继续追问的相关问题，格式如下：\n【推荐问题】\n1. xxx\n2. xxx\n3. xxx`;
   const requestStartTime = new Date().toISOString();
   console.log(`[${requestStartTime}] [fetchDifyMessage] 请求开始`, { message, apiKey, signal });
+  
+  // 创建超时控制器
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => {
+    timeoutController.abort();
+  }, 60000); // 60秒超时
+  
   try {
+    // 合并用户信号和超时信号
+    const combinedSignal = signal ? 
+      AbortSignal.any([signal, timeoutController.signal]) : 
+      timeoutController.signal;
+    
     response = await fetch(`/api/dify-chat-messages`, {
       method: 'POST',
       headers: {
@@ -19,9 +31,12 @@ export async function fetchDifyMessage(message: string, apiKey: string, onMessag
         query: promptWithSuggest,
         response_mode: 'streaming',
       }),
-      signal,
+      signal: combinedSignal,
     });
+    
+    clearTimeout(timeoutId); // 清除超时定时器
   } catch (e: any) {
+    clearTimeout(timeoutId); // 清除超时定时器
     const errorTime = new Date().toISOString();
     console.error(`[${errorTime}] [fetchDifyMessage] fetch异常`, {
       error: e,
@@ -33,10 +48,14 @@ export async function fetchDifyMessage(message: string, apiKey: string, onMessag
       signal,
     });
     if (e?.name === 'AbortError') {
+      if (timeoutController.signal.aborted) {
+        throw new Error('请求超时，请稍后重试');
+      }
       throw new Error('请求已被中断');
     }
     throw new Error('网络异常，请检查网络连接。');
   }
+  
   if (!response.ok) {
     let msg = 'Dify API 请求失败';
     try {
@@ -60,12 +79,20 @@ export async function fetchDifyMessage(message: string, apiKey: string, onMessag
   const reader = response.body?.getReader();
   let result = '';
   let suggestions: string[] = [];
+  let lastChunkTime = Date.now();
+  
   if (reader) {
     const decoder = new TextDecoder('utf-8');
     while (true) {
       let readResult;
       try {
+        // 检查是否超时（30秒内没有新数据）
+        if (Date.now() - lastChunkTime > 30000) {
+          throw new Error('流式响应超时，请重试');
+        }
+        
         readResult = await reader.read();
+        lastChunkTime = Date.now(); // 更新最后接收时间
       } catch (e: any) {
         const errorTime = new Date().toISOString();
         console.error(`[${errorTime}] [fetchDifyMessage] 读取流异常`, {

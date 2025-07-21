@@ -3,26 +3,18 @@ import NextAuth from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { FirestoreAdapter } from "@next-auth/firebase-adapter"
-import { cert } from 'firebase-admin/app'
-import { db } from './firebase'
+import { db } from './firebase-simple'
 import { getUserSubscription, createUser, getUserById } from './user-service'
 import bcrypt from 'bcryptjs'
-
-const firebaseConfig = {
-  credential: cert({
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  }),
-}
 
 export const authOptions: NextAuthOptions = {
   adapter: FirestoreAdapter(db),
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
+    // 暂时注释掉Google Provider，直到配置完成
+    // GoogleProvider({
+    //   clientId: process.env.GOOGLE_CLIENT_ID!,
+    //   clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    // }),
     CredentialsProvider({
       name: 'credentials',
       credentials: {
@@ -89,6 +81,8 @@ export const authOptions: NextAuthOptions = {
           if (fullUser) {
             session.user.createdAt = fullUser.createdAt.toISOString()
             session.user.subscription = fullUser.subscription
+            // 添加权限信息
+            ;(session.user as any).permissions = fullUser.permissions
           } else {
             // 如果获取不到用户信息，使用默认订阅
             session.user.subscription = {
@@ -97,6 +91,7 @@ export const authOptions: NextAuthOptions = {
               startDate: new Date(),
               endDate: new Date(),
             }
+            ;(session.user as any).permissions = []
           }
         } catch (error) {
           console.error('获取用户信息失败:', error)
@@ -106,6 +101,7 @@ export const authOptions: NextAuthOptions = {
             startDate: new Date(),
             endDate: new Date(),
           }
+          ;(session.user as any).permissions = []
         }
       }
       return session

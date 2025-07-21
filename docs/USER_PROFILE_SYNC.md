@@ -85,7 +85,7 @@
 
 ### 相关文件
 - `templates/SettingsPage/Profile/index.tsx` - 个人资料页面组件
-- `hooks/useUserProfile.tsx` - 用户资料管理Hook
+- `hooks/useUserProfile/` - 用户资料管理Hook
 - `app/api/user/profile/route.ts` - 用户资料API
 - `lib/user-service.ts` - 用户服务后端逻辑
 - `types/user.ts` - 用户类型定义

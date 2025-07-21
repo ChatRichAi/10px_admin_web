@@ -21,7 +21,7 @@ export interface UserSubscription {
   cancelAtPeriodEnd?: boolean
 }
 
-export type PlanType = 'free' | 'starter' | 'standard' | 'pro'
+export type PlanType = 'free' | 'starter' | 'standard' | 'pro' | 'admin'
 
 export type SubscriptionStatus = 'active' | 'cancelled' | 'expired' | 'trialing' | 'past_due'
 

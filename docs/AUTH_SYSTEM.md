@@ -62,7 +62,7 @@
 ├── middleware/
 │   └── auth.ts                # 权限中间件
 ├── hooks/
-│   └── useAuth.tsx            # 认证钩子
+│   └── useAuth/               # 认证钩子
 ├── components/
 │   ├── AuthProvider.tsx       # 认证提供程序
 │   ├── ProtectedRoute.tsx     # 路由保护

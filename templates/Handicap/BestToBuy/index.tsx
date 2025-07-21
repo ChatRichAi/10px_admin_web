@@ -8,9 +8,9 @@ import Image from "@/components/Image";
 import Percent from "@/components/Percent";
 import Modal from "@/components/Modal";
 import SetAlert from "@/components/SetAlert";
-import useBestToBuyData from "@/components/useBestToBuy";
+import useBestToBuyData from "@/hooks/useBestToBuy";
 import html2canvas from "html2canvas"; // 引入html2canvas库
-import { getSymbolType } from '@/components/useBestToBuy/symbolType';
+import { getSymbolType } from '@/hooks/useBestToBuy/symbolType';
 
 type BestToBuyProps = {
     symbol?: string;

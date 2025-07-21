@@ -1,3 +1,4 @@
+// 用于mui组件的样式
 import { createTheme } from '@mui/material/styles';
 
 const getMuiTheme = (mode: 'light' | 'dark') =>

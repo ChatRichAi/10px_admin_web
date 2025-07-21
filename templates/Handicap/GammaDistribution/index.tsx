@@ -11,26 +11,68 @@ import {
   ReferenceLine,
   CartesianGrid,
 } from "recharts";
-import { useGammaDistribution } from "@/components/useGammaDistribution";
+import { useGamma } from "@/hooks/useGamma";
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
+    const strike = label;
+    const callGamma = payload.find((item: any) => item.name === 'Calls')?.value || 0;
+    const putGamma = payload.find((item: any) => item.name === 'Puts')?.value || 0;
+    const totalGamma = callGamma + Math.abs(putGamma);
+    
     return (
       <div
-        className="border border-gray-300 dark:border-gray-600 rounded-lg p-3 shadow-lg backdrop-blur"
-        style={{ background: 'rgba(255,255,255,0.85)', color: '#222' }}
+        className="bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 border border-gray-300 dark:border-gray-600 rounded-lg p-4 shadow-lg backdrop-blur"
+        style={{ minWidth: '200px', color: '#222' }}
       >
-        <p className="text-gray-700 dark:text-white text-sm font-semibold mb-2">行权价: {label}</p>
-        <div className="space-y-1">
-          {payload.map((item: any, idx: number) => (
-            <div key={idx} className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded" style={{ background: item.color }}></span>
-                <span className="text-xs text-gray-500 dark:text-gray-300">{item.name}:</span>
-              </div>
-              <span className="text-xs text-gray-700 dark:text-white font-medium">{item.value.toLocaleString()}</span>
+        <div className="mb-3">
+          <p className="text-gray-700 dark:text-white text-sm font-bold mb-1">行权价: ${strike}</p>
+          <p className="text-xs text-gray-500">距离当前价格: {Math.abs(strike - 117538).toLocaleString()}</p>
+        </div>
+        
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded bg-[#B5E4CA]"></span>
+              <span className="text-xs text-gray-600 font-medium">Calls Gamma:</span>
             </div>
-          ))}
+            <span className="text-xs text-gray-700 font-bold">
+              {callGamma >= 1e6 ? (callGamma/1e6).toFixed(2) + 'M' : callGamma.toLocaleString()}
+            </span>
+          </div>
+          
+          <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded bg-[#0C68E9]"></span>
+              <span className="text-xs text-gray-600 font-medium">Puts Gamma:</span>
+            </div>
+            <span className="text-xs text-gray-700 font-bold">
+              {Math.abs(putGamma) >= 1e6 ? (Math.abs(putGamma)/1e6).toFixed(2) + 'M' : Math.abs(putGamma).toLocaleString()}
+            </span>
+              </div>
+          
+          <div className="border-t border-gray-200 pt-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-600 font-medium">总 Gamma:</span>
+              <span className="text-xs text-gray-700 font-bold">
+                {totalGamma >= 1e6 ? (totalGamma/1e6).toFixed(2) + 'M' : totalGamma.toLocaleString()}
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        {/* 市场情绪指示 */}
+        <div className="mt-3 pt-2 border-t border-gray-200">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-500">市场倾向:</span>
+            <span className={`text-xs font-medium px-2 py-1 rounded ${
+              callGamma > Math.abs(putGamma) 
+                ? 'bg-green-100 text-green-700' 
+                : 'bg-blue-100 text-blue-700'
+            }`}>
+              {callGamma > Math.abs(putGamma) ? '看涨' : '看跌'}
+            </span>
+          </div>
         </div>
       </div>
     );
@@ -40,7 +82,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 const GammaDistribution = ({ className }: { className?: string }) => {
   // 替换为hook获取数据
-  const { data, meta, loading, error } = useGammaDistribution('BTC');
+  const { data, meta, loading, error } = useGamma('BTC');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isAILoading, setIsAILoading] = useState(false);
   const [aiSummary, setAiSummary] = useState<string>('');

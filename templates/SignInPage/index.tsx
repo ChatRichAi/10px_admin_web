@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { useColorMode } from "@chakra-ui/react";
-import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Login from "@/components/Login";
 import Field from "@/components/Field";
+import { authAPI } from "@/lib/api";
 
 const SignInPage = () => {
     const { colorMode } = useColorMode();
@@ -29,20 +29,20 @@ const SignInPage = () => {
         setError("");
 
         try {
-            const result = await signIn("credentials", {
-                email,
-                password,
-                redirect: false,
-            });
-
-            if (result?.error) {
-                setError("邮箱或密码错误，请重试");
+            const result = await authAPI.login({ email, password });
+            
+            if (result.success) {
+                // 保存 token 到 localStorage
+                localStorage.setItem('auth_token', result.token);
+                localStorage.setItem('user_info', JSON.stringify(result.user));
+                
+                // 登录成功，跳转到管理后台
+                router.push("/admin");
             } else {
-                // 登录成功，重定向到首页
-                router.push("/");
+                setError("邮箱或密码错误，请重试");
             }
-        } catch (error) {
-            setError("登录失败，请稍后重试");
+        } catch (error: any) {
+            setError(error.message || "登录失败，请稍后重试");
         } finally {
             setIsLoading(false);
         }
@@ -50,11 +50,7 @@ const SignInPage = () => {
 
     // 处理Google登录
     const handleGoogleSignIn = async () => {
-        try {
-            await signIn("google", { callbackUrl: "/" });
-        } catch (error) {
-            setError("Google登录失败，请重试");
-        }
+        setError("Google登录功能暂未开放，请使用邮箱密码登录");
     };
 
     return (
@@ -132,6 +128,12 @@ const SignInPage = () => {
                     required
                     disabled={isLoading}
                 />
+                
+                <div className="text-right mb-3">
+                    <Link href="/forgot-password" className="text-sm text-primary hover:underline">
+                        忘记密码？
+                    </Link>
+                </div>
                 
                 <button 
                     type="submit" 

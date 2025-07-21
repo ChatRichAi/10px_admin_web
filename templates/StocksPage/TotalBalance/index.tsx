@@ -12,7 +12,7 @@ import { useColorMode } from "@chakra-ui/react";
 import Card from "@/components/Card";
 import CurrencyFormat from "@/components/CurrencyFormat";
 import Percent from "@/components/Percent";
-import useBinanceData from "@/components/useTotal"; // 导入自定义钩子
+import useBinanceData from "@/hooks/useTotal"; // 导入自定义钩子
 
 const duration = [
     {

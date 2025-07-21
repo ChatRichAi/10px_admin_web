@@ -1,4 +1,4 @@
-import { db } from './firebase'
+import { db } from './firebase-simple'
 import { User, UserSubscription, CreateUserData, PlanType } from '@/types/user'
 import bcrypt from 'bcryptjs'
 import { FieldValue } from 'firebase-admin/firestore'
@@ -45,15 +45,30 @@ export async function getUserById(userId: string): Promise<User | null> {
     }
 
     const userData = userDoc.data()!
+    
+    // 处理时间戳转换
+    const convertTimestamp = (timestamp: any) => {
+      if (timestamp && typeof timestamp.toDate === 'function') {
+        return timestamp.toDate()
+      }
+      if (timestamp instanceof Date) {
+        return timestamp
+      }
+      if (typeof timestamp === 'string') {
+        return new Date(timestamp)
+      }
+      return new Date()
+    }
+
     return {
       id: userDoc.id,
       ...userData,
-      createdAt: userData.createdAt.toDate(),
-      updatedAt: userData.updatedAt.toDate(),
+      createdAt: convertTimestamp(userData.createdAt),
+      updatedAt: convertTimestamp(userData.updatedAt),
       subscription: {
         ...userData.subscription,
-        startDate: userData.subscription.startDate.toDate(),
-        endDate: userData.subscription.endDate.toDate(),
+        startDate: convertTimestamp(userData.subscription.startDate),
+        endDate: convertTimestamp(userData.subscription.endDate),
       }
     } as User
   } catch (error) {
@@ -78,15 +93,29 @@ export async function getUserByEmail(email: string): Promise<User | null> {
     const userDoc = userSnapshot.docs[0]
     const userData = userDoc.data()
     
+    // 处理时间戳转换
+    const convertTimestamp = (timestamp: any) => {
+      if (timestamp && typeof timestamp.toDate === 'function') {
+        return timestamp.toDate()
+      }
+      if (timestamp instanceof Date) {
+        return timestamp
+      }
+      if (typeof timestamp === 'string') {
+        return new Date(timestamp)
+      }
+      return new Date()
+    }
+    
     return {
       id: userDoc.id,
       ...userData,
-      createdAt: userData.createdAt.toDate(),
-      updatedAt: userData.updatedAt.toDate(),
+      createdAt: convertTimestamp(userData.createdAt),
+      updatedAt: convertTimestamp(userData.updatedAt),
       subscription: {
         ...userData.subscription,
-        startDate: userData.subscription.startDate.toDate(),
-        endDate: userData.subscription.endDate.toDate(),
+        startDate: convertTimestamp(userData.subscription.startDate),
+        endDate: convertTimestamp(userData.subscription.endDate),
       }
     } as User
   } catch (error) {

@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import Icon from "@/components/Icon";
 // import Asset from "./Asset";
 // import Transaction from "./Transaction";
-import useRealTimePrices from "@/components/useSearchData";
+import useRealTimePrices from "@/hooks/useSearchData";
 import axios from "axios";
 import { useColorMode } from "@chakra-ui/react";
 import { useSymbolContext } from '@/components/contexts/SymbolContext';

@@ -1,3 +1,4 @@
+// 404页面
 import type { NextPage } from "next";
 import NotFoundPage from "@/templates/NotFoundPage";
 
