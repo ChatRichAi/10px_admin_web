@@ -98,6 +98,7 @@ const TermStructure = ({ className }: { className?: string }) => {
   });
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  
   const handleLegendClick = (key: string) => {
     setVisible(v => ({ ...v, [key]: !v[key] }));
   };
@@ -152,8 +153,7 @@ const TermStructure = ({ className }: { className?: string }) => {
       // 调用OpenAI API
       try {
         // 临时强制使用本地分析来确保套利机会显示
-        const forceLocalAnalysis = true; // 设置为true强制使用本地分析
-        
+        const forceLocalAnalysis = false; // 允许OpenAI分析
         if (forceLocalAnalysis) {
           throw new Error('强制使用本地分析以显示套利机会');
         }

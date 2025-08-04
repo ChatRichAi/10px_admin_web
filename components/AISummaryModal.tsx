@@ -63,6 +63,15 @@ const iconConfig: Record<string, { icon: JSX.Element, gradient: string, bgGradie
     gradient: 'from-cyan-500/90 to-cyan-600/90',
     bgGradient: 'from-cyan-50 to-cyan-100 dark:from-cyan-900/20 dark:to-cyan-800/20'
   },
+  support: {
+    icon: (
+      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+    ),
+    gradient: 'from-indigo-500/90 to-indigo-600/90',
+    bgGradient: 'from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20'
+  },
 };
 
 // 数值动画组件
@@ -118,9 +127,9 @@ const AnimatedValue = ({ value, className }: { value: string | number, className
 const AISummaryModal: React.FC<AISummaryModalProps> = ({ isLoading, summary, onClose, title, symbol }) => {
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-gray-200/50 dark:border-gray-700/50 transform transition-all duration-300 scale-100 hover:scale-[1.02]">
+      <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden border border-gray-200/50 dark:border-gray-700/50 transform transition-all duration-300 scale-100 hover:scale-[1.02]">
         {/* 头部 */}
-        <div className="relative bg-gradient-to-r from-[#0C68E9] to-[#B5E4CA] p-8 overflow-hidden">
+        <div className="relative bg-gradient-to-r from-[#0C68E9] to-[#B5E4CA] p-6 overflow-hidden">
           {/* 装饰性背景元素 */}
           <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent"></div>
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-16 translate-x-16"></div>
@@ -128,21 +137,21 @@ const AISummaryModal: React.FC<AISummaryModalProps> = ({ isLoading, summary, onC
           
           <div className="relative flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm border border-white/30 shadow-lg">
-                <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/30 shadow-lg">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                 </svg>
               </div>
               <div>
-                <h3 className="text-2xl font-bold text-white drop-shadow-lg">{title || 'AI 分析总结'}</h3>
-                {symbol && <p className="text-white/90 text-sm mt-1 font-medium">基于{symbol}数据智能分析</p>}
+                <h3 className="text-xl font-bold text-white drop-shadow-lg">{title || 'AI 分析总结'}</h3>
+                {symbol && <p className="text-white/90 text-xs mt-1 font-medium">基于{symbol}数据智能分析</p>}
               </div>
             </div>
             <button 
-              className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-xl flex items-center justify-center transition-all duration-200 backdrop-blur-sm border border-white/30 shadow-lg hover:shadow-xl hover:scale-110"
+              className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-all duration-200 backdrop-blur-sm border border-white/30 shadow-lg hover:shadow-xl hover:scale-110"
               onClick={onClose}
             >
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -150,7 +159,7 @@ const AISummaryModal: React.FC<AISummaryModalProps> = ({ isLoading, summary, onC
         </div>
         
         {/* 内容区域 */}
-        <div className={`p-8 ${isLoading ? 'flex items-center justify-center min-h-[400px]' : 'overflow-y-auto max-h-[60vh]'}`}>
+        <div className={`p-6 ${isLoading ? 'flex items-center justify-center min-h-[350px]' : 'overflow-y-auto max-h-[50vh]'}`}>
           {isLoading ? (
             <div className="flex items-center justify-center">
               <div className="text-center max-w-md">
@@ -218,67 +227,67 @@ const AISummaryModal: React.FC<AISummaryModalProps> = ({ isLoading, summary, onC
                   <div className="text-gray-600 dark:text-gray-300 text-lg font-medium">{summary.error}</div>
                 </div>
               ) : !summary || !Array.isArray(summary) || summary.length === 0 ? (
-                <div className="space-y-8">
-                  <div className="bg-gradient-to-r from-orange-200/80 to-orange-300/90 rounded-2xl p-8 border border-white/30 shadow-xl backdrop-blur-sm">
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-white/30 backdrop-blur-sm border border-white/40 shadow-lg">
-                        <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="space-y-6">
+                  <div className="bg-gradient-to-r from-orange-200/80 to-orange-300/90 rounded-xl p-6 border border-white/30 shadow-xl backdrop-blur-sm">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-white/30 backdrop-blur-sm border border-white/40 shadow-lg">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                         </svg>
                       </div>
-                      <h4 className="text-xl font-bold text-white">市场情绪洞察</h4>
+                      <h4 className="text-lg font-bold text-white">市场情绪洞察</h4>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                      <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 border border-white/40 flex flex-col items-start justify-center min-h-[100px] shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-                        <div className="text-sm text-gray-600 mb-2 font-medium">趋势分析</div>
-                        <div className="text-2xl font-bold text-yellow-600 mb-2">数据加载中</div>
-                        <div className="text-sm text-gray-500">正在分析</div>
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        <div className="bg-white/95 backdrop-blur-sm rounded-xl p-4 border border-white/40 flex flex-col items-start justify-center min-h-[80px] shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                          <div className="text-sm text-gray-600 mb-2 font-medium">趋势分析</div>
+                          <div className="text-xl font-bold text-yellow-600 mb-2">数据加载中</div>
+                          <div className="text-sm text-gray-500">正在分析</div>
+                        </div>
+                        <div className="bg-white/95 backdrop-blur-sm rounded-xl p-4 border border-white/40 flex flex-col items-start justify-center min-h-[80px] shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                          <div className="text-sm text-gray-600 mb-2 font-medium">市场情绪</div>
+                          <div className="text-xl font-bold text-yellow-600 mb-2">待分析</div>
+                          <div className="text-sm text-gray-500">情绪状态</div>
+                        </div>
                       </div>
-                      <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 border border-white/40 flex flex-col items-start justify-center min-h-[100px] shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-                        <div className="text-sm text-gray-600 mb-2 font-medium">市场情绪</div>
-                        <div className="text-2xl font-bold text-yellow-600 mb-2">待分析</div>
-                        <div className="text-sm text-gray-500">情绪状态</div>
-                      </div>
-                    </div>
                   </div>
-                  <div className="bg-gradient-to-r from-red-300/80 to-red-400/90 rounded-2xl p-8 border border-white/30 shadow-xl backdrop-blur-sm">
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-white/30 backdrop-blur-sm border border-white/40 shadow-lg">
-                        <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="bg-gradient-to-r from-red-300/80 to-red-400/90 rounded-xl p-6 border border-white/30 shadow-xl backdrop-blur-sm">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-white/30 backdrop-blur-sm border border-white/40 shadow-lg">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
                         </svg>
                       </div>
-                      <h4 className="text-xl font-bold text-white">风险提示</h4>
+                      <h4 className="text-lg font-bold text-white">风险提示</h4>
                     </div>
-                    <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 border border-white/40 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                    <div className="bg-white/95 backdrop-blur-sm rounded-xl p-4 border border-white/40 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
                       <div className="text-sm text-gray-600 mb-2 font-medium">波动率风险</div>
-                      <div className="text-2xl font-bold text-red-500 mb-2">分析中</div>
+                      <div className="text-xl font-bold text-red-500 mb-2">分析中</div>
                       <div className="text-sm text-gray-500">风险等级: 待评估</div>
                     </div>
                   </div>
-                  <div className="bg-gradient-to-r from-emerald-300/80 to-emerald-400/90 rounded-2xl p-8 border border-white/30 shadow-xl backdrop-blur-sm">
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-white/30 backdrop-blur-sm border border-white/40 shadow-lg">
-                        <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="bg-gradient-to-r from-emerald-300/80 to-emerald-400/90 rounded-xl p-6 border border-white/30 shadow-xl backdrop-blur-sm">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-white/30 backdrop-blur-sm border border-white/40 shadow-lg">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                       </div>
-                      <h4 className="text-xl font-bold text-white">AI操作建议</h4>
+                      <h4 className="text-lg font-bold text-white">AI操作建议</h4>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                      <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 border border-white/40 flex flex-col items-start justify-center min-h-[100px] shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                      <div className="bg-white/95 backdrop-blur-sm rounded-xl p-4 border border-white/40 flex flex-col items-start justify-center min-h-[80px] shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
                         <div className="text-sm text-gray-600 mb-2 font-medium">策略建议</div>
-                        <div className="text-2xl font-bold text-emerald-600 mb-2">分析中</div>
+                        <div className="text-xl font-bold text-emerald-600 mb-2">分析中</div>
                         <div className="text-sm text-gray-500">基于期限结构</div>
                       </div>
-                      <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 border border-white/40 flex flex-col items-start justify-center min-h-[100px] shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                      <div className="bg-white/95 backdrop-blur-sm rounded-xl p-4 border border-white/40 flex flex-col items-start justify-center min-h-[80px] shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
                         <div className="text-sm text-gray-600 mb-2 font-medium">仓位管理</div>
-                        <div className="text-2xl font-bold text-emerald-600 mb-2">分析中</div>
+                        <div className="text-xl font-bold text-emerald-600 mb-2">分析中</div>
                         <div className="text-sm text-gray-500">风险控制</div>
                       </div>
-                      <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 border border-white/40 flex flex-col items-start justify-center min-h-[100px] shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                      <div className="bg-white/95 backdrop-blur-sm rounded-xl p-4 border border-white/40 flex flex-col items-start justify-center min-h-[80px] shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
                         <div className="text-sm text-gray-600 mb-2 font-medium">时间窗口</div>
-                        <div className="text-2xl font-bold text-emerald-600 mb-2">分析中</div>
+                        <div className="text-xl font-bold text-emerald-600 mb-2">分析中</div>
                         <div className="text-sm text-gray-500">最佳时机</div>
                       </div>
                     </div>
@@ -295,12 +304,12 @@ const AISummaryModal: React.FC<AISummaryModalProps> = ({ isLoading, summary, onC
                   
                   if (!safeBlock.items || safeBlock.items.length === 0) {
                     return (
-                      <div key={idx} className={`bg-gradient-to-r ${iconConfig[safeBlock.icon]?.gradient || 'from-gray-300/80 to-gray-400/90'} rounded-2xl p-8 border border-white/30 shadow-xl backdrop-blur-sm hover:shadow-2xl transition-all duration-300`}>
-                        <div className="flex items-center gap-4 mb-6">
-                          <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-white/30 backdrop-blur-sm border border-white/40 shadow-lg">
+                      <div key={idx} className={`bg-gradient-to-r ${iconConfig[safeBlock.icon]?.gradient || 'from-gray-300/80 to-gray-400/90'} rounded-xl p-6 border border-white/30 shadow-xl backdrop-blur-sm hover:shadow-2xl transition-all duration-300`}>
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-white/30 backdrop-blur-sm border border-white/40 shadow-lg">
                             {iconConfig[safeBlock.icon]?.icon}
                           </div>
-                          <h4 className="text-xl font-bold text-white">{safeBlock.title}</h4>
+                          <h4 className="text-lg font-bold text-white">{safeBlock.title}</h4>
                         </div>
                         <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 border border-white/40 shadow-lg">
                           <div className="text-gray-500 text-base text-center">暂无分析数据</div>
@@ -310,14 +319,14 @@ const AISummaryModal: React.FC<AISummaryModalProps> = ({ isLoading, summary, onC
                   }
                   
                   return (
-                    <div key={idx} className={`bg-gradient-to-r ${iconConfig[safeBlock.icon]?.gradient || 'from-gray-300/80 to-gray-400/90'} rounded-2xl p-8 border border-white/30 shadow-xl backdrop-blur-sm hover:shadow-2xl transition-all duration-300 group`}>
-                      <div className="flex items-center gap-4 mb-6">
-                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-white/30 backdrop-blur-sm border border-white/40 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <div key={idx} className={`bg-gradient-to-r ${iconConfig[safeBlock.icon]?.gradient || 'from-gray-300/80 to-gray-400/90'} rounded-xl p-6 border border-white/30 shadow-xl backdrop-blur-sm hover:shadow-2xl transition-all duration-300 group`}>
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-white/30 backdrop-blur-sm border border-white/40 shadow-lg group-hover:scale-110 transition-transform duration-300">
                           {iconConfig[safeBlock.icon]?.icon}
                         </div>
-                        <h4 className="text-xl font-bold text-white">{safeBlock.title}</h4>
+                        <h4 className="text-lg font-bold text-white">{safeBlock.title}</h4>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {safeBlock.items.length === 0 ? (
                           <div className="col-span-full bg-white/95 backdrop-blur-sm rounded-xl p-6 border border-white/40 shadow-lg">
                             <div className="text-gray-500 text-base text-center">暂无分析数据</div>
@@ -333,9 +342,9 @@ const AISummaryModal: React.FC<AISummaryModalProps> = ({ isLoading, summary, onC
                             };
                             
                             return (
-                              <div key={i} className="bg-white/95 backdrop-blur-sm rounded-xl p-6 border border-white/40 flex flex-col items-start justify-center min-h-[100px] shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group/item">
+                              <div key={i} className="bg-white/95 backdrop-blur-sm rounded-xl p-4 border border-white/40 flex flex-col items-start justify-center min-h-[80px] shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group/item">
                                 <div className="text-sm text-gray-600 mb-2 font-medium group-hover/item:text-gray-800 transition-colors">{safeItem.title}</div>
-                                <div className={`text-2xl font-bold ${safeItem.valueColor} mb-2`}>
+                                <div className={`text-xl font-bold ${safeItem.valueColor} mb-2`}>
                                   {typeof safeItem.value === 'number' || !isNaN(parseFloat(safeItem.value.toString())) ? (
                                     <AnimatedValue value={safeItem.value} className={safeItem.valueColor} />
                                   ) : (
@@ -362,9 +371,9 @@ const AISummaryModal: React.FC<AISummaryModalProps> = ({ isLoading, summary, onC
         </div>
         
         {/* 底部按钮 */}
-        <div className="flex justify-end p-8 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+        <div className="flex justify-end p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
           <button 
-            className="px-8 py-3 bg-gradient-to-r from-[#0C68E9] to-[#B5E4CA] text-white rounded-xl hover:from-[#0B58D9] hover:to-[#A5D4BA] transition-all duration-300 font-medium shadow-lg hover:shadow-xl hover:scale-105 transform"
+            className="px-6 py-2 bg-gradient-to-r from-[#0C68E9] to-[#B5E4CA] text-white rounded-lg hover:from-[#0B58D9] hover:to-[#A5D4BA] transition-all duration-300 font-medium shadow-lg hover:shadow-xl hover:scale-105 transform"
             onClick={onClose}
           >
             关闭

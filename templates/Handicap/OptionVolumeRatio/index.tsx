@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import Card from "@/components/Card";
+import AISummaryModal from "@/components/AISummaryModal";
 import {
   PieChart,
   Pie,
@@ -39,6 +40,11 @@ const timeRanges = [
 const OptionVolumeRatio = ({ className }: { className?: string }) => {
   const [coin, setCoin] = useState('btc');
   const [timeRange, setTimeRange] = useState('24h');
+  
+  // AI分析状态
+  const [isAILoading, setIsAILoading] = useState(false);
+  const [aiSummary, setAiSummary] = useState<any>(null);
+  const [showAISummary, setShowAISummary] = useState(false);
 
   // refs for card and pie
   const containerRef = useRef<HTMLDivElement>(null);
@@ -148,9 +154,290 @@ const OptionVolumeRatio = ({ className }: { className?: string }) => {
     };
   }, []);
 
+  // AI总结功能
+  const handleAISummary = async () => {
+    setIsAILoading(true);
+    setShowAISummary(true);
+    
+    try {
+      // 分析数据
+      const totalVolume = data.reduce((sum, item) => sum + item.value, 0);
+      const callBlocked = data.find(d => d.key === 'call_blocked')?.value || 0;
+      const callBuys = data.find(d => d.key === 'call_buys')?.value || 0;
+      const callSells = data.find(d => d.key === 'call_sells')?.value || 0;
+      const putBlocked = data.find(d => d.key === 'put_blocked')?.value || 0;
+      const putBuys = data.find(d => d.key === 'put_buys')?.value || 0;
+      const putSells = data.find(d => d.key === 'put_sells')?.value || 0;
+      
+      // 计算比例
+      const callBlockedPercent = (callBlocked / totalVolume) * 100;
+      const callBuysPercent = (callBuys / totalVolume) * 100;
+      const callSellsPercent = (callSells / totalVolume) * 100;
+      const putBlockedPercent = (putBlocked / totalVolume) * 100;
+      const putBuysPercent = (putBuys / totalVolume) * 100;
+      const putSellsPercent = (putSells / totalVolume) * 100;
+      
+      // 分析市场情绪
+      const totalCallActivity = callBlocked + callBuys + callSells;
+      const totalPutActivity = putBlocked + putBuys + putSells;
+      const callPutRatio = totalCallActivity / totalPutActivity;
+      
+      // 分析交易行为
+      const totalBuys = callBuys + putBuys;
+      const totalSells = callSells + putSells;
+      const totalBlocked = callBlocked + putBlocked;
+      const buySellRatio = totalBuys / totalSells;
+      
+      // 构建AI分析请求数据
+      const analysisData = {
+        symbol: coin.toUpperCase(),
+        timeRange: timeRange === '24h' ? '24小时' : '7天',
+        totalVolume: totalVolume,
+        callBlocked: callBlocked,
+        callBuys: callBuys,
+        callSells: callSells,
+        putBlocked: putBlocked,
+        putBuys: putBuys,
+        putSells: putSells,
+        callBlockedPercent: callBlockedPercent,
+        callBuysPercent: callBuysPercent,
+        callSellsPercent: callSellsPercent,
+        putBlockedPercent: putBlockedPercent,
+        putBuysPercent: putBuysPercent,
+        putSellsPercent: putSellsPercent,
+        totalCallActivity: totalCallActivity,
+        totalPutActivity: totalPutActivity,
+        callPutRatio: callPutRatio,
+        totalBuys: totalBuys,
+        totalSells: totalSells,
+        totalBlocked: totalBlocked,
+        buySellRatio: buySellRatio
+      };
+
+      // 调用OpenAI API
+      const response = await fetch('/api/openai/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: analysisData,
+          analysisType: 'option_volume_ratio',
+          prompt: `请分析${coin.toUpperCase()}期权成交量比率数据，提供专业的期权市场分析。数据包括：
+          - 时间范围: ${timeRange === '24h' ? '24小时' : '7天'}
+          - 总成交量: ₿${totalVolume.toLocaleString()} ($${(totalVolume * 107300).toLocaleString()})
+          - Call Blocked: ₿${callBlocked.toLocaleString()} (${callBlockedPercent.toFixed(2)}%)
+          - Call Buys: ₿${callBuys.toLocaleString()} (${callBuysPercent.toFixed(2)}%)
+          - Call Sells: ₿${callSells.toLocaleString()} (${callSellsPercent.toFixed(2)}%)
+          - Put Blocked: ₿${putBlocked.toLocaleString()} (${putBlockedPercent.toFixed(2)}%)
+          - Put Buys: ₿${putBuys.toLocaleString()} (${putBuysPercent.toFixed(2)}%)
+          - Put Sells: ₿${putSells.toLocaleString()} (${putSellsPercent.toFixed(2)}%)
+          - Call/Put比率: ${callPutRatio.toFixed(2)}
+          - 买卖比率: ${buySellRatio.toFixed(2)}
+          
+          请提供结构化的分析报告，包括核心统计指标、成交量分布分析、市场情绪洞察、交易行为分析和风险提示。`
+        })
+      });
+
+      console.log('[OptionVolumeRatio] OpenAI API响应状态:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('[OptionVolumeRatio] OpenAI API错误详情:', errorData);
+        
+        // 根据错误代码提供更友好的错误信息
+        let errorMessage = 'AI分析请求失败';
+        if (errorData.code === 'API_KEY_MISSING') {
+          errorMessage = 'OpenAI API密钥未配置，请联系管理员';
+        } else if (errorData.code === 'API_KEY_INVALID') {
+          errorMessage = 'OpenAI API密钥无效，请联系管理员';
+        } else if (errorData.code === 'AUTH_FAILED') {
+          errorMessage = 'OpenAI API认证失败，请稍后重试';
+        } else if (errorData.code === 'RATE_LIMIT') {
+          errorMessage = 'API调用频率过高，请稍后重试';
+        } else if (errorData.code === 'EMPTY_RESPONSE') {
+          errorMessage = 'AI响应为空，请稍后重试';
+        } else if (errorData.code === 'PARSE_ERROR') {
+          errorMessage = 'AI响应格式错误，请稍后重试';
+        } else {
+          errorMessage = `AI分析请求失败: ${errorData.error || '未知错误'}`;
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      console.log('[OptionVolumeRatio] OpenAI API响应成功:', result);
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      // 使用OpenAI返回的结构化数据
+      setAiSummary(result.summary);
+
+    } catch (error) {
+      console.error('AI分析错误:', error);
+      
+      // 显示错误信息给用户
+      setAiSummary([{
+        type: 'error',
+        title: 'AI分析失败',
+        icon: 'error',
+        items: [{
+          title: '错误信息',
+          value: error.message || '未知错误',
+          valueColor: 'text-red-600',
+          subTitle: '请稍后重试或联系管理员',
+          subValue: ''
+        }]
+      }]);
+      
+      // 如果OpenAI失败，回退到本地分析
+      try {
+        const totalVolume = data.reduce((sum, item) => sum + item.value, 0);
+        const callBlocked = data.find(d => d.key === 'call_blocked')?.value || 0;
+        const callSells = data.find(d => d.key === 'call_sells')?.value || 0;
+        const putBuys = data.find(d => d.key === 'put_buys')?.value || 0;
+        
+        const fallbackSummary = [
+          {
+            type: 'stats',
+            title: '核心统计指标',
+            icon: 'stats',
+            items: [
+              {
+                title: '总成交量',
+                value: `₿${totalVolume.toLocaleString()}`,
+                valueColor: 'text-blue-600',
+                subTitle: `$${(totalVolume * 107300).toLocaleString()}`,
+                subValue: ''
+              },
+              {
+                title: 'Call Blocked',
+                value: `₿${callBlocked.toLocaleString()}`,
+                valueColor: 'text-green-600',
+                subTitle: `${((callBlocked / totalVolume) * 100).toFixed(2)}%`,
+                subValue: ''
+              },
+              {
+                title: 'Call Sells',
+                value: `₿${callSells.toLocaleString()}`,
+                valueColor: 'text-yellow-600',
+                subTitle: `${((callSells / totalVolume) * 100).toFixed(2)}%`,
+                subValue: ''
+              },
+              {
+                title: 'Put Buys',
+                value: `₿${putBuys.toLocaleString()}`,
+                valueColor: 'text-red-600',
+                subTitle: `${((putBuys / totalVolume) * 100).toFixed(2)}%`,
+                subValue: ''
+              }
+            ]
+          },
+          {
+            type: 'structure',
+            title: '成交量分布分析',
+            icon: 'structure',
+            items: [
+              {
+                title: '最大占比',
+                value: 'Call Blocked',
+                valueColor: 'text-green-600',
+                subTitle: `${((callBlocked / totalVolume) * 100).toFixed(2)}%`,
+                subValue: ''
+              },
+              {
+                title: '第二大占比',
+                value: 'Call Sells',
+                valueColor: 'text-yellow-600',
+                subTitle: `${((callSells / totalVolume) * 100).toFixed(2)}%`,
+                subValue: ''
+              },
+              {
+                title: '第三大占比',
+                value: 'Put Buys',
+                valueColor: 'text-red-600',
+                subTitle: `${((putBuys / totalVolume) * 100).toFixed(2)}%`,
+                subValue: ''
+              }
+            ]
+          },
+          {
+            type: 'sentiment',
+            title: '市场情绪洞察',
+            icon: 'sentiment',
+            items: [
+              {
+                title: '主导行为',
+                value: 'Call Blocked',
+                valueColor: 'text-green-600',
+                subTitle: '看涨期权被阻止',
+                subValue: ''
+              },
+              {
+                title: '次要行为',
+                value: 'Call Sells',
+                valueColor: 'text-yellow-600',
+                subTitle: '看涨期权卖出',
+                subValue: ''
+              },
+              {
+                title: '市场倾向',
+                value: '中性偏空',
+                valueColor: 'text-gray-600',
+                subTitle: '基于成交量分布',
+                subValue: ''
+              }
+            ]
+          }
+        ];
+
+        setAiSummary(fallbackSummary);
+      } catch (fallbackError) {
+        console.error('回退分析也失败:', fallbackError);
+        setAiSummary([{
+          type: 'error',
+          title: '分析失败',
+          icon: 'error',
+          items: [{
+            title: '错误信息',
+            value: '本地分析也失败，请检查数据',
+            valueColor: 'text-red-600',
+            subTitle: '请联系技术支持',
+            subValue: ''
+          }]
+        }]);
+      }
+    } finally {
+      setIsAILoading(false);
+    }
+  };
+
   return (
     <Card title={`期权成交占比 - 2025/07/01 (${timeRanges.find(t => t.value === timeRange)?.label})`} className={className}>
       <div className="mb-2 flex flex-wrap items-center gap-2">
+        {/* AI分析按钮 */}
+        <button
+          onClick={handleAISummary}
+          disabled={isAILoading}
+          className="ml-auto px-3 py-1 bg-gradient-to-r from-blue-500 to-green-500 text-white text-xs rounded-lg hover:from-blue-600 hover:to-green-600 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isAILoading ? (
+            <>
+              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              AI分析中...
+            </>
+          ) : (
+            <>
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              AI分析
+            </>
+          )}
+        </button>
         {coins.map(c => (
           <button
             key={c.value}
@@ -250,6 +537,17 @@ const OptionVolumeRatio = ({ className }: { className?: string }) => {
         </div>
       </div>
       <div className="mt-2 text-xs text-theme-tertiary text-center">总订单数量: ₿21,646.8 ($2,322,661,813)</div>
+      
+      {/* AI分析模态框 */}
+      {showAISummary && (
+        <AISummaryModal
+          isLoading={isAILoading}
+          summary={aiSummary}
+          onClose={() => setShowAISummary(false)}
+          title="期权成交量比率分析"
+          symbol={coin.toUpperCase()}
+        />
+      )}
     </Card>
   );
 };

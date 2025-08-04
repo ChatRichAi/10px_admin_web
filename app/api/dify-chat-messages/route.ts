@@ -10,16 +10,16 @@ export async function POST(req: NextRequest) {
       timeoutController.abort();
     }, 120000); // 2分钟超时
     
-    const apiRes = await fetch('http://103.106.191.243/v1/chat-messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': req.headers.get('authorization') || '',
-      },
-      body: req.body,
-      duplex: 'half',
+  const apiRes = await fetch('http://103.106.191.243/v1/chat-messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': req.headers.get('authorization') || '',
+    },
+    body: req.body,
+    duplex: 'half',
       signal: timeoutController.signal,
-    } as RequestInit);
+  } as RequestInit);
     
     clearTimeout(timeoutId); // 清除超时定时器
     
@@ -27,21 +27,21 @@ export async function POST(req: NextRequest) {
       throw new Error(`Dify API 响应错误: ${apiRes.status} ${apiRes.statusText}`);
     }
 
-    const { readable, writable } = new TransformStream();
-    const writer = writable.getWriter();
-    const reader = apiRes.body?.getReader();
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+  const reader = apiRes.body?.getReader();
 
     const pump = async () => {
-      if (!reader) {
-        writer.close();
-        return;
-      }
+    if (!reader) {
+      writer.close();
+      return;
+    }
       try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (value) await writer.write(value);
-        }
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) await writer.write(value);
+    }
       } catch (error) {
         console.error('Stream pump error:', error);
         // 尝试优雅地关闭流
@@ -51,19 +51,19 @@ export async function POST(req: NextRequest) {
           console.error('Writer abort error:', abortError);
         }
       } finally {
-        writer.close();
-      }
+    writer.close();
+  }
     };
-    pump();
+  pump();
 
-    return new Response(readable, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
+  return new Response(readable, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  });
   } catch (error) {
     console.error('Dify API route error:', error);
     return new Response(

@@ -2,7 +2,7 @@
 
 import Layout from "@/components/Layout";
 import dynamic from "next/dynamic";
-const Chat = dynamic(() => import("@/components/Chat"), { ssr: false });
+const Chat = dynamic(() => import("@/components/Chat/index").then(mod => ({ default: mod.default })), { ssr: false });
 
 const ChatPage = () => {
     return (

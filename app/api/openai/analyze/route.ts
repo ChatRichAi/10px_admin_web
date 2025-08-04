@@ -15,7 +15,17 @@ export async function POST(request: NextRequest) {
       console.log('[OpenAI API] 错误: API密钥未配置');
       return NextResponse.json({ 
         error: 'OpenAI API密钥未配置',
-        details: '请在.env.local文件中配置OPENAI_API_KEY环境变量'
+        details: '请在.env.local文件中配置OPENAI_API_KEY环境变量',
+        code: 'API_KEY_MISSING'
+      }, { status: 500 });
+    }
+
+    if (openaiApiKey === 'sk-your-openai-api-key-here') {
+      console.log('[OpenAI API] 错误: API密钥未更新');
+      return NextResponse.json({ 
+        error: 'OpenAI API密钥未更新',
+        details: '请更新.env.local文件中的OPENAI_API_KEY为有效的API密钥',
+        code: 'API_KEY_INVALID'
       }, { status: 500 });
     }
 
@@ -164,40 +174,81 @@ IV vs RV五大关键特征分析要求：
 
     console.log('[OpenAI API] 开始调用OpenAI API');
     
-    // 调用OpenAI API
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
+    // 调用OpenAI API，添加重试机制
+    let response;
+    let retryCount = 0;
+    const maxRetries = 2;
+    
+    while (retryCount <= maxRetries) {
+      try {
+        response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openaiApiKey}`,
+            'Content-Type': 'application/json',
           },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.2,
-        max_tokens: 1500
-      })
-    });
-
-    console.log('[OpenAI API] OpenAI响应状态:', response.status);
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('[OpenAI API] OpenAI API错误:', errorData);
-      return NextResponse.json({ 
-        error: 'OpenAI API调用失败',
-        details: errorData.error?.message || '未知错误',
-        status: response.status
-      }, { status: 500 });
+          body: JSON.stringify({
+            model: 'gpt-3.5-turbo',
+            messages: [
+              {
+                role: 'system',
+                content: systemPrompt
+              },
+              {
+                role: 'user',
+                content: prompt
+              }
+            ],
+            temperature: 0.2,
+            max_tokens: 1500
+          })
+        });
+        
+        console.log('[OpenAI API] OpenAI响应状态:', response.status);
+        
+        if (response.ok) {
+          break; // 成功响应，跳出重试循环
+        }
+        
+        const errorData = await response.json();
+        console.error('[OpenAI API] OpenAI API错误:', errorData);
+        
+        // 如果是认证错误，直接返回，不需要重试
+        if (response.status === 401) {
+          return NextResponse.json({ 
+            error: 'OpenAI API认证失败',
+            details: 'API密钥无效或已过期，请检查并更新API密钥',
+            code: 'AUTH_FAILED',
+            status: response.status
+          }, { status: 401 });
+        }
+        
+        // 如果是速率限制，等待后重试
+        if (response.status === 429 && retryCount < maxRetries) {
+          console.log(`[OpenAI API] 速率限制，等待 ${(retryCount + 1) * 2} 秒后重试...`);
+          await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 2000));
+          retryCount++;
+          continue;
+        }
+        
+        // 其他错误，返回错误信息
+        return NextResponse.json({ 
+          error: 'OpenAI API调用失败',
+          details: errorData.error?.message || '未知错误',
+          code: 'API_ERROR',
+          status: response.status
+        }, { status: 500 });
+        
+      } catch (fetchError) {
+        console.error('[OpenAI API] 网络请求错误:', fetchError);
+        if (retryCount < maxRetries) {
+          console.log(`[OpenAI API] 网络错误，等待 ${(retryCount + 1) * 2} 秒后重试...`);
+          await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 2000));
+          retryCount++;
+          continue;
+        }
+        throw fetchError;
+      }
     }
 
     const result = await response.json();
@@ -208,7 +259,11 @@ IV vs RV五大关键特征分析要求：
 
     if (!aiResponse) {
       console.log('[OpenAI API] 错误: AI响应为空');
-      return NextResponse.json({ error: 'AI响应为空' }, { status: 500 });
+      return NextResponse.json({ 
+        error: 'AI响应为空',
+        details: 'OpenAI返回的响应内容为空',
+        code: 'EMPTY_RESPONSE'
+      }, { status: 500 });
     }
 
     // 尝试解析JSON响应
@@ -216,6 +271,17 @@ IV vs RV五大关键特征分析要求：
       console.log('[OpenAI API] 开始解析JSON响应');
       const parsedResponse = JSON.parse(aiResponse);
       console.log('[OpenAI API] JSON解析成功');
+      
+      // 验证响应格式
+      if (!parsedResponse.summary || !Array.isArray(parsedResponse.summary)) {
+        return NextResponse.json({ 
+          error: 'AI响应格式错误',
+          details: 'AI返回的数据缺少summary字段或格式不正确',
+          code: 'INVALID_FORMAT',
+          rawResponse: aiResponse.substring(0, 500) + '...'
+        }, { status: 500 });
+      }
+      
       return NextResponse.json({ summary: parsedResponse.summary });
     } catch (parseError) {
       console.error('[OpenAI API] JSON解析错误:', parseError);
@@ -224,6 +290,7 @@ IV vs RV五大关键特征分析要求：
       return NextResponse.json({ 
         error: 'AI响应格式错误',
         details: 'AI返回的内容不是有效的JSON格式',
+        code: 'PARSE_ERROR',
         rawResponse: aiResponse.substring(0, 500) + '...'
       }, { status: 500 });
     }
@@ -232,7 +299,8 @@ IV vs RV五大关键特征分析要求：
     console.error('[OpenAI API] API处理错误:', error);
     return NextResponse.json({ 
       error: '服务器内部错误',
-      details: error instanceof Error ? error.message : '未知错误'
+      details: error instanceof Error ? error.message : '未知错误',
+      code: 'INTERNAL_ERROR'
     }, { status: 500 });
   }
 } 

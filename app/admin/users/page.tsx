@@ -14,14 +14,7 @@ export default function UsersPage() {
         <p className="text-gray-600 mt-2">管理用户账户、查看用户信息和编辑用户权限</p>
       </div>
       
-      <UserManager
-        onUserUpdate={(userId, updates) => {
-          console.log('用户更新:', userId, updates)
-        }}
-        onUserDelete={(userId) => {
-          console.log('用户删除:', userId)
-        }}
-      />
+      <UserManager />
     </div>
   )
 } 

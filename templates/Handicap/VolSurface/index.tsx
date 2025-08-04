@@ -69,6 +69,9 @@ const VolSurface = ({ className }: { className?: string }) => {
   });
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   
+  // 生成唯一ID，防止多个VolSurface组件冲突
+  const uniqueId = React.useMemo(() => `vol-surface-${Math.random().toString(36).substr(2, 9)}`, []);
+  
   // 添加自定义样式
   React.useEffect(() => {
     const style = document.createElement('style');
@@ -825,6 +828,7 @@ const VolSurface = ({ className }: { className?: string }) => {
         <div className="flex-1 p-4">
           <div className="h-full flex items-center justify-center">
             <Plot
+              divId={`${uniqueId}-fullscreen`}
               data={[
                 {
                   type: 'surface',
@@ -996,6 +1000,7 @@ const VolSurface = ({ className }: { className?: string }) => {
       
       <div className="h-96 flex items-center justify-center">
         <Plot
+          divId={uniqueId}
           data={[
             {
               type: 'surface',

@@ -268,168 +268,287 @@ const VolumeByStrike = ({ className }: { className?: string }) => {
       
       // 分析时间窗口特征
       const timeWindowText = timeRange === '24h' ? '24小时' : timeRange === '7d' ? '7天' : '30天';
-      
-      // 生成AI总结
-      const summary = [
-        {
-          type: 'stats',
-          title: '核心数据指标',
-          icon: 'stats',
-          items: [
-            {
-              title: '总Call成交量',
-              value: totalCalls.toLocaleString(),
-              valueColor: 'text-green-600',
-              subTitle: '看涨期权总成交量',
-              subValue: ''
-            },
-            {
-              title: '总Put成交量',
-              value: totalPuts.toLocaleString(),
-              valueColor: 'text-blue-600',
-              subTitle: '看跌期权总成交量',
-              subValue: ''
-            },
-            {
-              title: '整体PCR',
-              value: pcr.toFixed(2),
-              valueColor: pcr > 1 ? 'text-red-500' : pcr < 0.7 ? 'text-green-500' : 'text-yellow-500',
-              subTitle: pcr > 1 ? '看跌主导' : pcr < 0.7 ? '看涨主导' : '多空平衡',
-              subValue: ''
-            },
-            {
-              title: '分析范围',
-              value: `$${strikeMin.toLocaleString()} - $${strikeMax.toLocaleString()}`,
-              valueColor: 'text-gray-600',
-              subTitle: '行权价范围',
-              subValue: ''
-            }
-          ]
-        },
-        {
-          type: 'structure',
-          title: '成交量集中度分析',
-          icon: 'structure',
-          items: [
-            {
-              title: '最大Call成交量',
-              value: `$${maxCallsStrike?.toLocaleString() || '-'}`,
-              valueColor: 'text-green-600',
-              subTitle: `${maxCalls.toLocaleString()} (占比${maxCallsPercent.toFixed(1)}%)`,
-              subValue: ''
-            },
-            {
-              title: '最大Put成交量',
-              value: `$${maxPutsStrike?.toLocaleString() || '-'}`,
-              valueColor: 'text-blue-600',
-              subTitle: `${maxPuts.toLocaleString()} (占比${maxPutsPercent.toFixed(1)}%)`,
-              subValue: ''
-            },
-            {
-              title: '成交量前五',
-              value: top5Volume.map(d => `$${d.strike.toLocaleString()}`).join(', '),
-              valueColor: 'text-purple-600',
-              subTitle: '重点关注行权价',
-              subValue: ''
-            }
-          ]
-        },
-        {
-          type: 'sentiment',
-          title: '市场情绪分布',
-          icon: 'sentiment',
-          items: [
-            {
-              title: 'Call主导行权价',
-              value: callDominantStrikes.toString(),
-              valueColor: 'text-green-600',
-              subTitle: 'Call > Put × 1.5',
-              subValue: ''
-            },
-            {
-              title: 'Put主导行权价',
-              value: putDominantStrikes.toString(),
-              valueColor: 'text-red-600',
-              subTitle: 'Put > Call × 1.5',
-              subValue: ''
-            },
-            {
-              title: '平衡行权价',
-              value: balancedStrikes.toString(),
-              valueColor: 'text-yellow-600',
-              subTitle: '多空相对平衡',
-              subValue: ''
-            },
-            {
-              title: '整体情绪',
-              value: pcr > 1 ? '偏向看跌' : pcr < 0.7 ? '偏向看涨' : '相对平衡',
-              valueColor: pcr > 1 ? 'text-red-500' : pcr < 0.7 ? 'text-green-500' : 'text-yellow-500',
-              subTitle: '市场整体倾向',
-              subValue: ''
-            }
-          ]
-        },
-        {
-          type: 'risk',
-          title: '行权价分布特征',
-          icon: 'risk',
-          items: [
-            {
-              title: '平均行权价',
-              value: `$${avgStrike.toLocaleString()}`,
-              valueColor: 'text-gray-600',
-              subTitle: '所有行权价平均值',
-              subValue: ''
-            },
-            {
-              title: '高行权价区域',
-              value: highStrikeData.length.toString(),
-              valueColor: 'text-blue-600',
-              subTitle: `${((highStrikeData.length / filteredData.length) * 100).toFixed(1)}%`,
-              subValue: ''
-            },
-            {
-              title: '低行权价区域',
-              value: lowStrikeData.length.toString(),
-              valueColor: 'text-green-600',
-              subTitle: `${((lowStrikeData.length / filteredData.length) * 100).toFixed(1)}%`,
-              subValue: ''
-            }
-          ]
-        },
-        {
-          type: 'advice',
-          title: '关键观察点',
-          icon: 'advice',
-          items: [
-            {
-              title: '重点关注行权价',
-              value: top5Volume.map(d => `$${d.strike.toLocaleString()}`).join(', '),
-              valueColor: 'text-purple-600',
-              subTitle: '成交量最高的行权价',
-              subValue: ''
-            },
-            {
-              title: '建议关注',
-              value: maxCallsStrike && maxPutsStrike ? `$${maxCallsStrike.toLocaleString()} (Call热点) 和 $${maxPutsStrike.toLocaleString()} (Put热点)` : '无显著热点',
-              valueColor: 'text-blue-600',
-              subTitle: '成交量热点区域',
-              subValue: ''
-            },
-            {
-              title: '风险提示',
-              value: '高成交量区域价格波动可能加剧',
-              valueColor: 'text-red-500',
-              subTitle: '需要特别关注',
-              subValue: ''
-            }
-          ]
-        }
-      ];
 
-      setAiSummary(summary);
+      // 构建AI分析请求数据
+      const analysisData = {
+        symbol: 'BTC',
+        timeRange: timeWindowText,
+        totalCalls: totalCalls,
+        totalPuts: totalPuts,
+        pcr: pcr,
+        maxCalls: maxCalls,
+        maxPuts: maxPuts,
+        maxCallsStrike: maxCallsStrike,
+        maxPutsStrike: maxPutsStrike,
+        maxCallsPercent: maxCallsPercent,
+        maxPutsPercent: maxPutsPercent,
+        avgStrike: avgStrike,
+        strikeRange: `${strikeMin} - ${strikeMax}`,
+        callDominantStrikes: callDominantStrikes,
+        putDominantStrikes: putDominantStrikes,
+        balancedStrikes: balancedStrikes,
+        top5Volume: top5Volume.map(d => ({ strike: d.strike, totalVolume: d.calls + d.puts })),
+        highStrikeData: highStrikeData.length,
+        lowStrikeData: lowStrikeData.length,
+        filteredData: filteredData.slice(0, 10) // 只发送前10个数据点避免token过多
+      };
+
+      // 调用OpenAI API
+      const response = await fetch('/api/openai/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: analysisData,
+          analysisType: 'volume_by_strike',
+          prompt: `请分析BTC期权成交量分布数据，提供专业的期权市场分析。数据包括：
+          - 时间范围: ${timeWindowText}
+          - 总Call成交量: ${totalCalls.toLocaleString()}
+          - 总Put成交量: ${totalPuts.toLocaleString()}
+          - 整体PCR: ${pcr.toFixed(2)} (${pcr > 1 ? '看跌主导' : pcr < 0.7 ? '看涨主导' : '多空平衡'})
+          - 最大Call成交量: ${maxCalls.toLocaleString()} @ $${maxCallsStrike?.toLocaleString() || '-'} (占比${maxCallsPercent.toFixed(1)}%)
+          - 最大Put成交量: ${maxPuts.toLocaleString()} @ $${maxPutsStrike?.toLocaleString() || '-'} (占比${maxPutsPercent.toFixed(1)}%)
+          - 平均行权价: $${avgStrike.toLocaleString()}
+          - 行权价范围: $${strikeMin.toLocaleString()} - $${strikeMax.toLocaleString()}
+          - Call主导行权价: ${callDominantStrikes}个
+          - Put主导行权价: ${putDominantStrikes}个
+          - 平衡行权价: ${balancedStrikes}个
+          - 成交量前五行权价: ${top5Volume.map(d => `$${d.strike.toLocaleString()}`).join(', ')}
+          
+          请提供结构化的分析报告，包括核心统计指标、成交量集中度分析、市场情绪分布、行权价分布特征和关键观察点。`
+        })
+      });
+
+      console.log('[VolumeByStrike] OpenAI API响应状态:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('[VolumeByStrike] OpenAI API错误详情:', errorData);
+        
+        // 根据错误代码提供更友好的错误信息
+        let errorMessage = 'AI分析请求失败';
+        if (errorData.code === 'API_KEY_MISSING') {
+          errorMessage = 'OpenAI API密钥未配置，请联系管理员';
+        } else if (errorData.code === 'API_KEY_INVALID') {
+          errorMessage = 'OpenAI API密钥无效，请联系管理员';
+        } else if (errorData.code === 'AUTH_FAILED') {
+          errorMessage = 'OpenAI API认证失败，请稍后重试';
+        } else if (errorData.code === 'RATE_LIMIT') {
+          errorMessage = 'API调用频率过高，请稍后重试';
+        } else if (errorData.code === 'EMPTY_RESPONSE') {
+          errorMessage = 'AI响应为空，请稍后重试';
+        } else if (errorData.code === 'PARSE_ERROR') {
+          errorMessage = 'AI响应格式错误，请稍后重试';
+        } else {
+          errorMessage = `AI分析请求失败: ${errorData.error || '未知错误'}`;
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      console.log('[VolumeByStrike] OpenAI API响应成功:', result);
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      // 使用OpenAI返回的结构化数据
+      setAiSummary(result.summary);
+
     } catch (error) {
-      setAiSummary({ error: 'AI分析生成失败，请稍后重试。' });
+      console.error('AI分析错误:', error);
+      
+      // 显示错误信息给用户
+      setAiSummary([{
+        type: 'error',
+        title: 'AI分析失败',
+        icon: 'error',
+        items: [{
+          title: '错误信息',
+          value: error.message || '未知错误',
+          valueColor: 'text-red-600',
+          subTitle: '请稍后重试或联系管理员',
+          subValue: ''
+        }]
+      }]);
+      
+      // 如果OpenAI失败，回退到本地分析
+      try {
+        const fallbackSummary = [
+          {
+            type: 'stats',
+            title: '核心数据指标',
+            icon: 'stats',
+            items: [
+              {
+                title: '总Call成交量',
+                value: totalCalls.toLocaleString(),
+                valueColor: 'text-green-600',
+                subTitle: '看涨期权总成交量',
+                subValue: ''
+              },
+              {
+                title: '总Put成交量',
+                value: totalPuts.toLocaleString(),
+                valueColor: 'text-blue-600',
+                subTitle: '看跌期权总成交量',
+                subValue: ''
+              },
+              {
+                title: '整体PCR',
+                value: pcr.toFixed(2),
+                valueColor: pcr > 1 ? 'text-red-500' : pcr < 0.7 ? 'text-green-500' : 'text-yellow-500',
+                subTitle: pcr > 1 ? '看跌主导' : pcr < 0.7 ? '看涨主导' : '多空平衡',
+                subValue: ''
+              },
+              {
+                title: '分析范围',
+                value: `$${strikeMin.toLocaleString()} - $${strikeMax.toLocaleString()}`,
+                valueColor: 'text-gray-600',
+                subTitle: '行权价范围',
+                subValue: ''
+              }
+            ]
+          },
+          {
+            type: 'structure',
+            title: '成交量集中度分析',
+            icon: 'structure',
+            items: [
+              {
+                title: '最大Call成交量',
+                value: `$${maxCallsStrike?.toLocaleString() || '-'}`,
+                valueColor: 'text-green-600',
+                subTitle: `${maxCalls.toLocaleString()} (占比${maxCallsPercent.toFixed(1)}%)`,
+                subValue: ''
+              },
+              {
+                title: '最大Put成交量',
+                value: `$${maxPutsStrike?.toLocaleString() || '-'}`,
+                valueColor: 'text-blue-600',
+                subTitle: `${maxPuts.toLocaleString()} (占比${maxPutsPercent.toFixed(1)}%)`,
+                subValue: ''
+              },
+              {
+                title: '成交量前五',
+                value: top5Volume.map(d => `$${d.strike.toLocaleString()}`).join(', '),
+                valueColor: 'text-purple-600',
+                subTitle: '重点关注行权价',
+                subValue: ''
+              }
+            ]
+          },
+          {
+            type: 'sentiment',
+            title: '市场情绪分布',
+            icon: 'sentiment',
+            items: [
+              {
+                title: 'Call主导行权价',
+                value: callDominantStrikes.toString(),
+                valueColor: 'text-green-600',
+                subTitle: 'Call > Put × 1.5',
+                subValue: ''
+              },
+              {
+                title: 'Put主导行权价',
+                value: putDominantStrikes.toString(),
+                valueColor: 'text-red-600',
+                subTitle: 'Put > Call × 1.5',
+                subValue: ''
+              },
+              {
+                title: '平衡行权价',
+                value: balancedStrikes.toString(),
+                valueColor: 'text-yellow-600',
+                subTitle: '多空相对平衡',
+                subValue: ''
+              },
+              {
+                title: '整体情绪',
+                value: pcr > 1 ? '偏向看跌' : pcr < 0.7 ? '偏向看涨' : '相对平衡',
+                valueColor: pcr > 1 ? 'text-red-500' : pcr < 0.7 ? 'text-green-500' : 'text-yellow-500',
+                subTitle: '市场整体倾向',
+                subValue: ''
+              }
+            ]
+          },
+          {
+            type: 'risk',
+            title: '行权价分布特征',
+            icon: 'risk',
+            items: [
+              {
+                title: '平均行权价',
+                value: `$${avgStrike.toLocaleString()}`,
+                valueColor: 'text-gray-600',
+                subTitle: '所有行权价平均值',
+                subValue: ''
+              },
+              {
+                title: '高行权价区域',
+                value: highStrikeData.length.toString(),
+                valueColor: 'text-blue-600',
+                subTitle: `${((highStrikeData.length / filteredData.length) * 100).toFixed(1)}%`,
+                subValue: ''
+              },
+              {
+                title: '低行权价区域',
+                value: lowStrikeData.length.toString(),
+                valueColor: 'text-green-600',
+                subTitle: `${((lowStrikeData.length / filteredData.length) * 100).toFixed(1)}%`,
+                subValue: ''
+              }
+            ]
+          },
+          {
+            type: 'advice',
+            title: '关键观察点',
+            icon: 'advice',
+            items: [
+              {
+                title: '重点关注行权价',
+                value: top5Volume.map(d => `$${d.strike.toLocaleString()}`).join(', '),
+                valueColor: 'text-purple-600',
+                subTitle: '成交量最高的行权价',
+                subValue: ''
+              },
+              {
+                title: '建议关注',
+                value: maxCallsStrike && maxPutsStrike ? `$${maxCallsStrike.toLocaleString()} (Call热点) 和 $${maxPutsStrike.toLocaleString()} (Put热点)` : '无显著热点',
+                valueColor: 'text-blue-600',
+                subTitle: '成交量热点区域',
+                subValue: ''
+              },
+              {
+                title: '风险提示',
+                value: '高成交量区域价格波动可能加剧',
+                valueColor: 'text-red-500',
+                subTitle: '需要特别关注',
+                subValue: ''
+              }
+            ]
+          }
+        ];
+
+        setAiSummary(fallbackSummary);
+      } catch (fallbackError) {
+        console.error('回退分析也失败:', fallbackError);
+        setAiSummary([{
+          type: 'error',
+          title: '分析失败',
+          icon: 'error',
+          items: [{
+            title: '错误信息',
+            value: '本地分析也失败，请检查数据',
+            valueColor: 'text-red-600',
+            subTitle: '请联系技术支持',
+            subValue: ''
+          }]
+        }]);
+      }
     } finally {
       setIsAILoading(false);
     }

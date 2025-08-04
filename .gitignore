@@ -35,5 +35,14 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# 排除后端目录
+# admin backend (separate repository)
 10px_admin_backend/
+
+# admin dashboard dependencies
+admin-dashboard/node_modules/
+admin-dashboard/.next/
+admin-dashboard/out/
+admin-dashboard/build/
+
+# test files
+test_openai_api.js

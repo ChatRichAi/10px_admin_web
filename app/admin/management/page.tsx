@@ -26,14 +26,7 @@ export default function ManagementPage() {
           {/* 用户管理 */}
           <div>
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">用户管理</h2>
-            <UserManager
-              onUserUpdate={(userId, updates) => {
-                console.log('用户更新:', userId, updates)
-              }}
-              onUserDelete={(userId) => {
-                console.log('用户删除:', userId)
-              }}
-            />
+            <UserManager />
           </div>
 
           {/* 权限管理 */}
@@ -53,14 +46,7 @@ export default function ManagementPage() {
           {/* 订阅管理 */}
           <div>
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">订阅管理</h2>
-            <SubscriptionManager
-              onSubscriptionUpdate={(userId, subscription) => {
-                console.log('订阅更新:', userId, subscription)
-              }}
-              onBulkAction={(action, userIds, plan) => {
-                console.log('批量操作:', action, userIds, plan)
-              }}
-            />
+            <SubscriptionManager />
           </div>
 
           {/* 使用说明 */}

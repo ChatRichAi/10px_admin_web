@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Card from "@/components/Card";
+import TimerSettingsModal from '@/components/TimerSettings';
+import AISummaryModal from '@/components/AISummaryModal';
 import {
   BarChart,
   Bar,
@@ -85,8 +87,18 @@ const GammaDistribution = ({ className }: { className?: string }) => {
   const { data, meta, loading, error } = useGamma('BTC');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isAILoading, setIsAILoading] = useState(false);
-  const [aiSummary, setAiSummary] = useState<string>('');
+  const [aiSummary, setAiSummary] = useState<any>(null);
   const [showAISummary, setShowAISummary] = useState(false);
+  // 状态补充
+  const [showTimerModal, setShowTimerModal] = useState(false);
+  const [timerSettings, setTimerSettings] = useState({
+    enabled: false,
+    interval: 30, // 分钟
+    nextRun: null as Date | null,
+    telegramChatId: '',
+    telegramBotToken: ''
+  });
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // 添加图例圆角样式
   React.useEffect(() => {
@@ -103,12 +115,15 @@ const GammaDistribution = ({ className }: { className?: string }) => {
     };
   }, []);
 
-  // AI总结功能
+  // AI总结逻辑
   const handleAISummary = async () => {
     setIsAILoading(true);
     setShowAISummary(true);
-    
     try {
+      if (!data || data.length === 0) {
+        setAiSummary({ error: '暂无数据可供分析。' });
+        return;
+      }
       // 分析数据
       const maxCallGamma = Math.max(...data.map(d => d.callGamma));
       const maxPutGamma = Math.min(...data.map(d => d.putGamma));
@@ -117,35 +132,165 @@ const GammaDistribution = ({ className }: { className?: string }) => {
       const currentPrice = meta.stockPrice;
       const zeroGammaStrike = meta.zeroGamma;
       
-      // 生成AI总结
-      const summary = `基于UPST Gamma分布分析：
-
-📊 **关键数据点**
-• 当前股价: $${currentPrice}
-• 最大Call Gamma: ${(maxCallGamma / 1000000).toFixed(1)}M (行权价: $${data.find(d => d.callGamma === maxCallGamma)?.strike})
-• 最大Put Gamma: ${(Math.abs(maxPutGamma) / 1000000).toFixed(1)}M (行权价: $${data.find(d => d.putGamma === maxPutGamma)?.strike})
-
-🎯 **重要支撑阻力位**
-• Call Wall: $${callWallStrike} - 看涨期权集中区域
-• Put Wall: $${putWallStrike} - 看跌期权集中区域  
-• Zero Gamma: $${zeroGammaStrike} - 中性Gamma点
-
-💡 **市场洞察**
-• 股价接近Call Wall，可能面临上行阻力
-• Put Wall提供下方支撑
-• Gamma分布显示市场对${currentPrice > callWallStrike ? '上行' : '下行'}方向有较强预期
-
-⚠️ **风险提示**
-• 高Gamma区域价格波动可能加剧
-• 建议关注${callWallStrike}和${putWallStrike}关键价位`;
-
-      setAiSummary(summary);
-    } catch (error) {
-      setAiSummary('AI分析生成失败，请稍后重试。');
+      // 计算更多分析指标
+      const totalCallGamma = data.reduce((sum, d) => sum + d.callGamma, 0);
+      const totalPutGamma = data.reduce((sum, d) => sum + Math.abs(d.putGamma), 0);
+      const gammaRatio = totalCallGamma / totalPutGamma;
+      const gammaSkew = gammaRatio > 1.2 ? '看涨偏斜' : gammaRatio < 0.8 ? '看跌偏斜' : '中性';
+      
+      // 组装分析数据
+      const analysisData = {
+        currentPrice,
+        maxCallGamma,
+        maxPutGamma,
+        callWallStrike,
+        putWallStrike,
+        zeroGammaStrike,
+        totalCallGamma,
+        totalPutGamma,
+        gammaRatio,
+        gammaSkew,
+        data: data.slice(0, 10) // 取前10个数据点
+      };
+      
+      // 调用OpenAI API
+      try {
+        const forceLocalAnalysis = false; // 允许OpenAI分析
+        if (forceLocalAnalysis) {
+          throw new Error('强制使用本地分析');
+        }
+        const response = await fetch('/api/openai/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            data: analysisData,
+            analysisType: 'gamma_distribution',
+            prompt: `请分析BTC Gamma分布数据，生成结构化的期权市场分析报告。请严格按照以下要求返回结构化JSON，所有模块都必须出现，不可省略：\n\n1. 核心统计指标\n2. Gamma分布特征\n3. 市场情绪洞察（必须包含"Gamma偏斜"字段，内容为对当前市场Gamma偏斜的简要评估）\n4. 支撑阻力分析（必须为单独模块，内容包括：Call Wall分析、Put Wall分析、Zero Gamma分析，每项都要有title、value、subTitle、subValue）\n5. 风险提示\n6. AI操作建议（必须包含"Gamma策略"字段，内容为针对当前市场的Gamma操作建议）\n\nJSON结构示例：\n{\n  "summary": [\n    { "type": "core", "title": "核心统计指标", "icon": "stats", "items": [ ... ] },\n    { "type": "structure", "title": "Gamma分布特征", "icon": "structure", "items": [ ... ] },\n    { "type": "sentiment", "title": "市场情绪洞察", "icon": "sentiment", "items": [ { "title": "Gamma偏斜", "value": "...", "subTitle": "...", "subValue": "..." } ] },\n    { "type": "support", "title": "支撑阻力分析", "icon": "support", "items": [ { "title": "Call Wall分析", "value": "...", "subTitle": "...", "subValue": "..." }, { "title": "Put Wall分析", "value": "...", "subTitle": "...", "subValue": "..." }, { "title": "Zero Gamma分析", "value": "...", "subTitle": "...", "subValue": "..." } ] },\n    { "type": "risk", "title": "风险提示", "icon": "risk", "items": [ ... ] },\n    { "type": "advice", "title": "AI操作建议", "icon": "advice", "items": [ { "title": "Gamma策略", "value": "...", "subTitle": "...", "subValue": "..." } ] }\n  ]\n}\n\n注意：所有模块都必须出现，哪怕内容为空也要有结构。"支撑阻力分析"必须为单独模块且有三项，"AI操作建议"必须有"Gamma策略"。不要输出任何多余的解释或说明，只返回JSON。`
+          })
+        });
+        if (!response.ok) throw new Error('OpenAI分析请求失败');
+        const result = await response.json();
+        if (result.summary && Array.isArray(result.summary) && result.summary.length > 0) {
+          // 检查是否包含支撑阻力分析模块，如果没有则使用本地分析
+          const hasSupport = result.summary.some((block: any) => 
+            block.type === 'support' || 
+            (block.items && block.items.some((item: any) => item.title && item.title.includes('Wall')))
+          );
+          
+          if (!hasSupport) {
+            console.log('OpenAI返回数据中缺少支撑阻力分析模块，使用本地分析');
+            throw new Error('OpenAI返回数据不完整，使用本地分析');
+          }
+          
+          setAiSummary(result.summary);
+          return;
+        } else {
+          throw new Error('AI返回内容为空或格式错误');
+        }
+      } catch (err) {
+        // fallback: 本地降级分析
+        const summary = [
+          {
+            type: 'core',
+            title: '核心统计指标',
+            icon: 'stats',
+            items: [
+              { title: '当前股价', value: `$${currentPrice}`, valueColor: 'text-yellow-600', subTitle: '实时价格', subValue: 'USD' },
+              { title: '最大Call Gamma', value: `${(maxCallGamma / 1000000).toFixed(1)}M`, valueColor: 'text-green-600', subTitle: '行权价', subValue: `$${data.find(d => d.callGamma === maxCallGamma)?.strike}` },
+              { title: '最大Put Gamma', value: `${(Math.abs(maxPutGamma) / 1000000).toFixed(1)}M`, valueColor: 'text-blue-600', subTitle: '行权价', subValue: `$${data.find(d => d.putGamma === maxPutGamma)?.strike}` },
+              { title: 'Gamma比率', value: gammaRatio.toFixed(2), valueColor: 'text-purple-600', subTitle: 'Call/Put', subValue: gammaRatio > 1 ? 'Call主导' : 'Put主导' },
+            ]
+          },
+          {
+            type: 'structure',
+            title: 'Gamma分布特征',
+            icon: 'structure',
+            items: [
+              { title: '分布偏斜', value: gammaSkew, valueColor: 'text-green-600', subTitle: '市场倾向', subValue: gammaRatio > 1.2 ? '看涨情绪' : gammaRatio < 0.8 ? '看跌情绪' : '中性情绪' },
+              { title: '总Call Gamma', value: `${(totalCallGamma / 1000000).toFixed(1)}M`, valueColor: 'text-green-600', subTitle: '看涨压力', subValue: totalCallGamma > totalPutGamma ? '较强' : '较弱' },
+              { title: '总Put Gamma', value: `${(totalPutGamma / 1000000).toFixed(1)}M`, valueColor: 'text-blue-600', subTitle: '看跌压力', subValue: totalPutGamma > totalCallGamma ? '较强' : '较弱' },
+            ]
+          },
+          {
+            type: 'sentiment',
+            title: '市场情绪洞察',
+            icon: 'sentiment',
+            items: [
+              { title: '市场倾向', value: currentPrice > callWallStrike ? '看涨' : '看跌', valueColor: 'text-yellow-600', subTitle: '价格位置', subValue: currentPrice > callWallStrike ? '突破阻力' : '接近支撑' },
+              { title: 'Gamma偏斜', value: gammaSkew, valueColor: gammaRatio > 1.2 ? 'text-green-600' : gammaRatio < 0.8 ? 'text-blue-600' : 'text-gray-600', subTitle: '偏斜程度', subValue: Math.abs(gammaRatio - 1).toFixed(2) },
+            ]
+          },
+          {
+            type: 'support',
+            title: '支撑阻力分析',
+            icon: 'support',
+            items: [
+              { title: 'Call Wall分析', value: `$${callWallStrike}`, valueColor: 'text-green-600', subTitle: '阻力位', subValue: currentPrice > callWallStrike ? '已突破' : '未突破' },
+              { title: 'Put Wall分析', value: `$${putWallStrike}`, valueColor: 'text-blue-600', subTitle: '支撑位', subValue: currentPrice < putWallStrike ? '已跌破' : '未跌破' },
+              { title: 'Zero Gamma分析', value: zeroGammaStrike !== null ? `$${zeroGammaStrike}` : '暂无', valueColor: 'text-gray-600', subTitle: '中性点', subValue: zeroGammaStrike !== null ? 'Gamma平衡点' : '数据不足' },
+            ]
+          },
+          {
+            type: 'risk',
+            title: '风险提示',
+            icon: 'risk',
+            items: [
+              { title: 'Gamma风险', value: '高Gamma区域波动加剧', valueColor: 'text-red-500', subTitle: '风险等级', subValue: Math.max(maxCallGamma, Math.abs(maxPutGamma)) > 1000000 ? '高风险' : '中风险' },
+              { title: '价格风险', value: '接近关键价位', valueColor: 'text-red-500', subTitle: '关注价位', subValue: `$${callWallStrike} / $${putWallStrike}` },
+            ]
+          },
+          {
+            type: 'advice',
+            title: 'AI操作建议',
+            icon: 'advice',
+            items: [
+              { title: '策略建议', value: gammaRatio > 1.2 ? '考虑做多策略' : gammaRatio < 0.8 ? '考虑做空策略' : '保持中性策略', valueColor: 'text-emerald-600', subTitle: '基于Gamma', subValue: gammaRatio > 1.2 ? 'Call Gamma主导' : gammaRatio < 0.8 ? 'Put Gamma主导' : 'Gamma平衡' },
+              { title: '仓位管理', value: '关注关键价位', valueColor: 'text-emerald-600', subTitle: '风险控制', subValue: '设置止损止盈' },
+              { title: '时间窗口', value: '短期交易', valueColor: 'text-emerald-600', subTitle: '最佳时机', subValue: 'Gamma变化拐点' },
+              { title: 'Gamma策略', value: gammaRatio > 1.2 ? '做多Gamma策略' : gammaRatio < 0.8 ? '做空Gamma策略' : '中性Gamma策略', valueColor: gammaRatio > 1.2 ? 'text-green-600' : gammaRatio < 0.8 ? 'text-blue-600' : 'text-gray-600', subTitle: '策略类型', subValue: gammaRatio > 1.2 ? '利用Call Gamma优势' : gammaRatio < 0.8 ? '利用Put Gamma优势' : '平衡Gamma风险' },
+            ]
+          },
+        ];
+        setAiSummary(summary);
+      }
+    } catch (e) {
+      setAiSummary({ error: 'AI分析生成失败，请稍后重试。' });
     } finally {
       setIsAILoading(false);
     }
   };
+
+  // 定时器管理功能
+  const startTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    if (timerSettings.enabled) {
+      const intervalMs = timerSettings.interval * 60 * 1000;
+      timerRef.current = setInterval(async () => {
+        await handleAISummary();
+      }, intervalMs);
+      const nextRun = new Date(Date.now() + intervalMs);
+      setTimerSettings(prev => ({ ...prev, nextRun }));
+    }
+  };
+  const stopTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setTimerSettings(prev => ({ ...prev, enabled: false, nextRun: null }));
+  };
+  useEffect(() => {
+    if (timerSettings.enabled) {
+      startTimer();
+    }
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [timerSettings.enabled, timerSettings.interval]);
 
   // loading & error 处理
   if (loading) return <Card className={className}><div className="py-20 text-center text-gray-500">数据加载中...</div></Card>;
@@ -171,6 +316,15 @@ const GammaDistribution = ({ className }: { className?: string }) => {
               ) : (
                 'AI'
               )}
+            </button>
+            <button 
+              className={`p-2 text-theme-secondary hover:text-theme-primary transition-colors ${timerSettings.enabled ? 'text-green-500' : ''}`}
+              onClick={() => setShowTimerModal(true)}
+              title={timerSettings.enabled ? '定时器已启用' : '设置定时AI分析'}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
             </button>
             <button 
               className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
@@ -221,7 +375,7 @@ const GammaDistribution = ({ className }: { className?: string }) => {
 
   return (
     <Card className={className}>
-      <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2">
         <div className="font-bold text-2xl text-center text-theme-primary">BTC Gamma</div>
         <div className="flex items-center gap-2">
           <button 
@@ -235,6 +389,15 @@ const GammaDistribution = ({ className }: { className?: string }) => {
             ) : (
               'AI'
             )}
+          </button>
+          <button 
+            className={`p-1 text-theme-secondary hover:text-theme-primary transition-colors ${timerSettings.enabled ? 'text-green-500' : ''}`}
+            onClick={() => setShowTimerModal(true)}
+            title={timerSettings.enabled ? '定时器已启用' : '设置定时AI分析'}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
           </button>
           <button 
             className="p-1 text-theme-secondary hover:text-theme-primary"
@@ -278,162 +441,49 @@ const GammaDistribution = ({ className }: { className?: string }) => {
       
       {/* AI总结模态框 */}
       {showAISummary && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden border border-gray-200/50 dark:border-gray-700/50">
-            {/* 头部 */}
-            <div className="relative bg-gradient-to-r from-[#0C68E9] to-[#B5E4CA] p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-white">AI Gamma分析总结</h3>
-                    <p className="text-white/80 text-sm">基于UPST期权数据智能分析</p>
-                  </div>
-                </div>
-                <button 
-                  className="w-8 h-8 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-all duration-200"
-                  onClick={() => setShowAISummary(false)}
-                >
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            {/* 内容区域 */}
-            <div className="p-6 overflow-y-auto max-h-[60vh]">
-              {isAILoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <div className="w-12 h-12 border-3 border-[#0C68E9] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-gray-600 dark:text-gray-300 font-medium">AI正在分析数据...</p>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">请稍候，正在生成专业分析报告</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* 关键数据点 */}
-                  <div className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800/30">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                      </div>
-                      <h4 className="text-lg font-bold text-gray-900 dark:text-white">关键数据点</h4>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">当前股价</p>
-                        <p className="text-lg font-bold text-gray-900 dark:text-white">${meta.stockPrice}</p>
-                      </div>
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">最大Call Gamma</p>
-                        <p className="text-lg font-bold text-green-600">{(Math.max(...data.map(d => d.callGamma)) / 1000000).toFixed(1)}M</p>
-                      </div>
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">最大Put Gamma</p>
-                        <p className="text-lg font-bold text-blue-600">{(Math.abs(Math.min(...data.map(d => d.putGamma))) / 1000000).toFixed(1)}M</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 重要支撑阻力位 */}
-                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800/30">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                      </div>
-                      <h4 className="text-lg font-bold text-gray-900 dark:text-white">重要支撑阻力位</h4>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Call Wall</p>
-                        <p className="text-lg font-bold text-green-600">${meta.callWall}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">看涨期权集中区域</p>
-                      </div>
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Put Wall</p>
-                        <p className="text-lg font-bold text-blue-600">${meta.putWall}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">看跌期权集中区域</p>
-                      </div>
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Zero Gamma</p>
-                        <p className="text-lg font-bold text-gray-600">{meta.zeroGamma !== null ? meta.zeroGamma : <span className="text-gray-400">暂无</span>}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">中性Gamma点</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 市场洞察 */}
-                  <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl p-4 border border-yellow-100 dark:border-yellow-800/30">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-8 h-8 bg-yellow-500 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                        </svg>
-                      </div>
-                      <h4 className="text-lg font-bold text-gray-900 dark:text-white">市场洞察</h4>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-start gap-2">
-                        <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2 flex-shrink-0"></div>
-                        <p className="text-gray-700 dark:text-gray-300">股价接近Call Wall，可能面临上行阻力</p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2 flex-shrink-0"></div>
-                        <p className="text-gray-700 dark:text-gray-300">Put Wall提供下方支撑</p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2 flex-shrink-0"></div>
-                        <p className="text-gray-700 dark:text-gray-300">Gamma分布显示市场对{meta.stockPrice > meta.callWall ? '上行' : '下行'}方向有较强预期</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 风险提示 */}
-                  <div className="bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 rounded-xl p-4 border border-red-100 dark:border-red-800/30">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                        </svg>
-                      </div>
-                      <h4 className="text-lg font-bold text-gray-900 dark:text-white">风险提示</h4>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-start gap-2">
-                        <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                        <p className="text-gray-700 dark:text-gray-300">高Gamma区域价格波动可能加剧</p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                        <p className="text-gray-700 dark:text-gray-300">建议关注${meta.callWall}和${meta.putWall}关键价位</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* 底部按钮 */}
-            <div className="flex justify-end p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-              <button 
-                className="px-6 py-2 bg-gradient-to-r from-[#0C68E9] to-[#B5E4CA] text-white rounded-lg hover:from-[#0B58D9] hover:to-[#A5D4BA] transition-all duration-200 font-medium shadow-lg hover:shadow-xl"
-                onClick={() => setShowAISummary(false)}
-              >
-                关闭
-              </button>
-            </div>
-          </div>
-        </div>
+        <AISummaryModal
+          isLoading={isAILoading}
+          summary={aiSummary}
+          onClose={() => setShowAISummary(false)}
+          title="AI Gamma分布分析总结"
+          symbol="BTC Gamma分布"
+        />
+      )}
+      {/* 定时器设置模态框 */}
+      {showTimerModal && (
+        <TimerSettingsModal
+          settings={timerSettings}
+          onSave={async (newSettings) => {
+            try {
+              if (newSettings.enabled) {
+                if (!newSettings.telegramBotToken.trim()) {
+                  throw new Error('请输入Telegram Bot Token');
+                }
+                if (!newSettings.telegramChatId.trim()) {
+                  throw new Error('请输入Telegram Chat ID');
+                }
+                const chatId = newSettings.telegramChatId.trim();
+                if (!/^-?\d+$/.test(chatId)) {
+                  throw new Error('Chat ID必须是数字格式');
+                }
+                const botToken = newSettings.telegramBotToken.trim();
+                if (!/^\d+:[A-Za-z0-9_-]+$/.test(botToken)) {
+                  throw new Error('Bot Token格式不正确');
+                }
+              }
+              setTimerSettings(newSettings);
+              if (newSettings.enabled) {
+                startTimer();
+              } else {
+                stopTimer();
+              }
+              return Promise.resolve();
+            } catch (error) {
+              throw error;
+            }
+          }}
+          onClose={() => setShowTimerModal(false)}
+        />
       )}
     </Card>
   );

@@ -1,5 +1,8 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
+
+const AdminDashboardCharts = dynamic(() => import('@/components/AdminDashboardCharts'), { ssr: false })
 
 export const metadata: Metadata = {
   title: '管理后台 - 10px AI',
@@ -81,24 +84,8 @@ export default function AdminPage() {
         <p className="text-gray-600 mt-2">管理您的用户、权限和系统配置</p>
       </div>
 
-      {/* 统计卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {stats.map((stat, index) => (
-          <div key={index} className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">{stat.label}</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
-              </div>
-              <div className={`text-sm font-medium ${
-                stat.changeType === 'positive' ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {stat.change}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* 仪表台可视化图表 */}
+      <AdminDashboardCharts />
 
       {/* 快速操作 */}
       <div className="mb-8">

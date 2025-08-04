@@ -1,19 +1,12 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  experimental: {
-    appDir: true,
-  },
-  env: {
-    API_BASE_URL: process.env.API_BASE_URL || 'http://localhost:3001',
-  },
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/:path*`,
-      },
-    ];
-  },
-}
+// module.exports = {
+//   async rewrites() {
+//     return [
+//       {
+//         source: '/api/dify/:path*',
+//         destination: 'http://103.106.191.243/v1/:path*', // 你的 Dify API
+//       },
+//     ];
+//   },
+// }; 
 
-module.exports = nextConfig 
+module.exports = {}; 

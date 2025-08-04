@@ -5,7 +5,7 @@ import { useState } from "react";
 
 type UpgradeToProProps = {};
 
-const UpgradeToPro = ({}: UpgradeToProProps) => {
+const UpgradeToPro = ({ }: UpgradeToProProps) => {
     const [visible, setVisible] = useState<boolean>(true);
 
     return visible ? (
@@ -30,14 +30,13 @@ const UpgradeToPro = ({}: UpgradeToProProps) => {
             </div>
             <div className="p-6">
                 <div className="mb-2 text-h5 2xl:text-title-1s">
-                    Trade smarter with 10px AI
+                    自然语言挖掘量化机会
                 </div>
                 <div className="-mr-1 text-body-2s text-theme-secondary">
-                    Automate trades based on user-defined criteria, using AI
-                    algorithms.
+                    使用人工智能算法，根据用户定义的标准实现交易自动化
                 </div>
                 <Link className="btn-secondary w-full mt-6" href="/pricing">
-                    Upgrade to Pro
+                    立即升级
                 </Link>
             </div>
         </div>

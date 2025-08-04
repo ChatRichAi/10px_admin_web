@@ -11,6 +11,12 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+import { 
+  AILoadingAnimation, 
+  MarketSentimentIndicator, 
+  AIButton,
+  AIAnalysisResult 
+} from "@/components/AIAnimation";
 
 
 
@@ -61,7 +67,7 @@ const OptionOpenInterest = ({ className }: { className?: string }) => {
   const [viewMode, setViewMode] = useState('expire');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isAILoading, setIsAILoading] = useState(false);
-  const [aiSummary, setAiSummary] = useState<string>('');
+  const [aiSummary, setAiSummary] = useState<any[]>([]);
   const [showAISummary, setShowAISummary] = useState(false);
 
   // 使用新的钩子获取真实数据
@@ -116,7 +122,18 @@ const OptionOpenInterest = ({ className }: { className?: string }) => {
     
     try {
       if (!openInterestData || openInterestData.length === 0) {
-        setAiSummary('暂无数据可供分析。');
+        setAiSummary([{
+          type: 'error',
+          title: '暂无数据',
+          icon: 'error',
+          items: [{
+            title: '错误信息',
+            value: '暂无数据可供分析',
+            valueColor: 'text-red-600',
+            subTitle: '请稍后重试',
+            subValue: ''
+          }]
+        }]);
         return;
       }
 
@@ -144,35 +161,282 @@ const OptionOpenInterest = ({ className }: { className?: string }) => {
       const bullishExpiries = openInterestData.filter(d => d.pcr < 0.7).length;
       const bearishExpiries = openInterestData.filter(d => d.pcr > 1.2).length;
       const neutralExpiries = openInterestData.length - bullishExpiries - bearishExpiries;
+
+      // 构建AI分析请求数据
+      const analysisData = {
+        symbol: coin.toUpperCase(),
+        totalCalls: totalCalls,
+        totalPuts: totalPuts,
+        totalPCR: totalPCR,
+        avgPCR: avgPCR,
+        maxCalls: maxCalls,
+        maxPuts: maxPuts,
+        maxCallsExpiry: maxCallsExpiry,
+        maxPutsExpiry: maxPutsExpiry,
+        maxCallsPercent: maxCallsPercent,
+        maxPutsPercent: maxPutsPercent,
+        bullishExpiries: bullishExpiries,
+        bearishExpiries: bearishExpiries,
+        neutralExpiries: neutralExpiries,
+        highPCRExpiries: highPCRExpiries,
+        lowPCRExpiries: lowPCRExpiries,
+        top3Volume: top3Volume.map(d => ({ expiry: d.expiry, totalVolume: d.calls + d.puts })),
+        openInterestData: openInterestData.slice(0, 10) // 只发送前10个数据点避免token过多
+      };
+
+      // 调用OpenAI API
+      const response = await fetch('/api/openai/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: analysisData,
+          analysisType: 'option_open_interest',
+          prompt: `请分析${coin.toUpperCase()}期权持仓量数据，提供专业的期权市场分析。数据包括：
+          - 总Call持仓量: ${totalCalls.toLocaleString()}
+          - 总Put持仓量: ${totalPuts.toLocaleString()}
+          - 整体PCR: ${totalPCR.toFixed(2)} (${totalPCR > 1 ? '看跌主导' : totalPCR < 0.7 ? '看涨主导' : '多空平衡'})
+          - 平均PCR: ${avgPCR.toFixed(2)}
+          - 最大Call持仓: ${maxCalls.toLocaleString()} @ ${maxCallsExpiry} (占比${maxCallsPercent.toFixed(1)}%)
+          - 最大Put持仓: ${maxPuts.toLocaleString()} @ ${maxPutsExpiry} (占比${maxPutsPercent.toFixed(1)}%)
+          - 看涨到期日: ${bullishExpiries}个 (PCR < 0.7)
+          - 看跌到期日: ${bearishExpiries}个 (PCR > 1.2)
+          - 平衡到期日: ${neutralExpiries}个
+          - 持仓量前三: ${top3Volume.map(d => `${d.expiry}(${(d.calls + d.puts).toLocaleString()})`).join(', ')}
+          - 高PCR到期日: ${highPCRExpiries.length > 0 ? highPCRExpiries.map(d => `${d.expiry}(PCR:${d.pcr.toFixed(2)})`).join(', ') : '无'}
+          - 低PCR到期日: ${lowPCRExpiries.length > 0 ? lowPCRExpiries.map(d => `${d.expiry}(PCR:${d.pcr.toFixed(2)})`).join(', ') : '无'}
+          
+          请提供结构化的分析报告，包括核心统计指标、持仓量集中度分析、市场情绪分布、到期日分析和风险预警。`
+        })
+      });
+
+      console.log('[OptionOpenInterest] OpenAI API响应状态:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('[OptionOpenInterest] OpenAI API错误详情:', errorData);
+        
+        // 根据错误代码提供更友好的错误信息
+        let errorMessage = 'AI分析请求失败';
+        if (errorData.code === 'API_KEY_MISSING') {
+          errorMessage = 'OpenAI API密钥未配置，请联系管理员';
+        } else if (errorData.code === 'API_KEY_INVALID') {
+          errorMessage = 'OpenAI API密钥无效，请联系管理员';
+        } else if (errorData.code === 'AUTH_FAILED') {
+          errorMessage = 'OpenAI API认证失败，请稍后重试';
+        } else if (errorData.code === 'RATE_LIMIT') {
+          errorMessage = 'API调用频率过高，请稍后重试';
+        } else if (errorData.code === 'EMPTY_RESPONSE') {
+          errorMessage = 'AI响应为空，请稍后重试';
+        } else if (errorData.code === 'PARSE_ERROR') {
+          errorMessage = 'AI响应格式错误，请稍后重试';
+        } else {
+          errorMessage = `AI分析请求失败: ${errorData.error || '未知错误'}`;
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      console.log('[OptionOpenInterest] OpenAI API响应成功:', result);
       
-      // 生成AI总结
-      const summary = `基于${coin.toUpperCase()}期权持仓量深度分析：
+      if (result.error) {
+        throw new Error(result.error);
+      }
 
-📊 **核心数据指标**
-• 总Call持仓量: ${totalCalls.toLocaleString()}
-• 总Put持仓量: ${totalPuts.toLocaleString()}
-• 整体PCR: ${totalPCR.toFixed(2)} ${totalPCR > 1 ? '(看跌主导)' : totalPCR < 0.7 ? '(看涨主导)' : '(多空平衡)'}
-• 平均PCR: ${avgPCR.toFixed(2)}
+      // 使用OpenAI返回的结构化数据
+      setAiSummary(result.summary);
 
-🎯 **市场情绪分布**
-• 看涨到期日: ${bullishExpiries}个 (PCR < 0.7)
-• 看跌到期日: ${bearishExpiries}个 (PCR > 1.2)
-• 平衡到期日: ${neutralExpiries}个
-• 市场整体情绪: ${totalPCR > 1 ? '偏向看跌' : totalPCR < 0.7 ? '偏向看涨' : '相对平衡'}
+    } catch (error: any) {
+      console.error('AI分析错误:', error);
+      
+      // 显示错误信息给用户
+      setAiSummary([{
+        type: 'error',
+        title: 'AI分析失败',
+        icon: 'error',
+        items: [{
+          title: '错误信息',
+          value: error?.message || '未知错误',
+          valueColor: 'text-red-600',
+          subTitle: '请稍后重试或联系管理员',
+          subValue: ''
+        }]
+      }]);
+      
+      // 如果OpenAI失败，回退到本地分析
+      try {
+        // 重新计算分析数据
+        const maxCalls = Math.max(...openInterestData.map(d => d.calls));
+        const maxPuts = Math.max(...openInterestData.map(d => d.puts));
+        const maxCallsExpiry = openInterestData.find(d => d.calls === maxCalls)?.expiry;
+        const maxPutsExpiry = openInterestData.find(d => d.puts === maxPuts)?.expiry;
+        const avgPCR = openInterestData.reduce((sum, d) => sum + d.pcr, 0) / openInterestData.length;
+        
+        // 计算持仓量集中度
+        const totalVolume = openInterestData.reduce((sum, d) => sum + d.calls + d.puts, 0);
+        const maxCallsPercent = (maxCalls / totalVolume) * 100;
+        const maxPutsPercent = (maxPuts / totalVolume) * 100;
+        
+        // 分析PCR分布
+        const highPCRExpiries = openInterestData.filter(d => d.pcr > 1.2).map(d => ({ expiry: d.expiry, pcr: d.pcr }));
+        const lowPCRExpiries = openInterestData.filter(d => d.pcr < 0.5).map(d => ({ expiry: d.expiry, pcr: d.pcr }));
+        
+        // 分析持仓量分布
+        const sortedByVolume = [...openInterestData].sort((a, b) => (b.calls + b.puts) - (a.calls + a.puts));
+        const top3Volume = sortedByVolume.slice(0, 3);
+        
+        // 计算市场情绪指标
+        const bullishExpiries = openInterestData.filter(d => d.pcr < 0.7).length;
+        const bearishExpiries = openInterestData.filter(d => d.pcr > 1.2).length;
+        const neutralExpiries = openInterestData.length - bullishExpiries - bearishExpiries;
 
-💡 **关键到期日分析**
-• 最大Call持仓: ${maxCallsExpiry} (${maxCalls.toLocaleString()}, 占比${maxCallsPercent.toFixed(1)}%)
-• 最大Put持仓: ${maxPutsExpiry} (${maxPuts.toLocaleString()}, 占比${maxPutsPercent.toFixed(1)}%)
-• 持仓量前三: ${top3Volume.map(d => `${d.expiry}(${(d.calls + d.puts).toLocaleString()})`).join(', ')}
+        const fallbackSummary = [
+          {
+            type: 'stats',
+            title: '核心数据指标',
+            icon: 'stats',
+            items: [
+              {
+                title: '总Call持仓量',
+                value: totalCalls.toLocaleString(),
+                valueColor: 'text-green-600',
+                subTitle: '看涨期权总持仓量',
+                subValue: ''
+              },
+              {
+                title: '总Put持仓量',
+                value: totalPuts.toLocaleString(),
+                valueColor: 'text-blue-600',
+                subTitle: '看跌期权总持仓量',
+                subValue: ''
+              },
+              {
+                title: '整体PCR',
+                value: totalPCR.toFixed(2),
+                valueColor: totalPCR > 1 ? 'text-red-500' : totalPCR < 0.7 ? 'text-green-500' : 'text-yellow-500',
+                subTitle: totalPCR > 1 ? '看跌主导' : totalPCR < 0.7 ? '看涨主导' : '多空平衡',
+                subValue: ''
+              },
+              {
+                title: '平均PCR',
+                value: avgPCR.toFixed(2),
+                valueColor: avgPCR > 1 ? 'text-red-500' : avgPCR < 0.7 ? 'text-green-500' : 'text-yellow-500',
+                subTitle: '所有到期日平均',
+                subValue: ''
+              }
+            ]
+          },
+          {
+            type: 'structure',
+            title: '持仓量集中度分析',
+            icon: 'structure',
+            items: [
+              {
+                title: '最大Call持仓',
+                value: maxCallsExpiry || '-',
+                valueColor: 'text-green-600',
+                subTitle: `${maxCalls.toLocaleString()} (占比${maxCallsPercent.toFixed(1)}%)`,
+                subValue: ''
+              },
+              {
+                title: '最大Put持仓',
+                value: maxPutsExpiry || '-',
+                valueColor: 'text-blue-600',
+                subTitle: `${maxPuts.toLocaleString()} (占比${maxPutsPercent.toFixed(1)}%)`,
+                subValue: ''
+              },
+              {
+                title: '持仓量前三',
+                value: top3Volume.map(d => d.expiry).join(', '),
+                valueColor: 'text-purple-600',
+                subTitle: '重点关注到期日',
+                subValue: ''
+              }
+            ]
+          },
+          {
+            type: 'sentiment',
+            title: '市场情绪分布',
+            icon: 'sentiment',
+            items: [
+              {
+                title: '看涨到期日',
+                value: bullishExpiries.toString(),
+                valueColor: 'text-green-600',
+                subTitle: 'PCR < 0.7',
+                subValue: ''
+              },
+              {
+                title: '看跌到期日',
+                value: bearishExpiries.toString(),
+                valueColor: 'text-red-600',
+                subTitle: 'PCR > 1.2',
+                subValue: ''
+              },
+              {
+                title: '平衡到期日',
+                value: neutralExpiries.toString(),
+                valueColor: 'text-yellow-600',
+                subTitle: '多空相对平衡',
+                subValue: ''
+              },
+              {
+                title: '整体情绪',
+                value: totalPCR > 1 ? '偏向看跌' : totalPCR < 0.7 ? '偏向看涨' : '相对平衡',
+                valueColor: totalPCR > 1 ? 'text-red-500' : totalPCR < 0.7 ? 'text-green-500' : 'text-yellow-500',
+                subTitle: '市场整体倾向',
+                subValue: ''
+              }
+            ]
+          },
+          {
+            type: 'risk',
+            title: '风险预警',
+            icon: 'risk',
+            items: [
+              {
+                title: '高PCR到期日',
+                value: highPCRExpiries.length > 0 ? highPCRExpiries.map(d => `${d.expiry}(PCR:${d.pcr.toFixed(2)})`).join(', ') : '无',
+                valueColor: 'text-red-600',
+                subTitle: 'PCR > 1.2',
+                subValue: ''
+              },
+              {
+                title: '低PCR到期日',
+                value: lowPCRExpiries.length > 0 ? lowPCRExpiries.map(d => `${d.expiry}(PCR:${d.pcr.toFixed(2)})`).join(', ') : '无',
+                valueColor: 'text-green-600',
+                subTitle: 'PCR < 0.5',
+                subValue: ''
+              },
+              {
+                title: '建议关注',
+                value: top3Volume.map(d => d.expiry).join(', '),
+                valueColor: 'text-blue-600',
+                subTitle: '持仓量最高的到期日',
+                subValue: ''
+              }
+            ]
+          }
+        ];
 
-⚠️ **风险预警**
-• 高PCR到期日: ${highPCRExpiries.length > 0 ? highPCRExpiries.map(d => `${d.expiry}(PCR:${d.pcr.toFixed(2)})`).join(', ') : '无'}
-• 低PCR到期日: ${lowPCRExpiries.length > 0 ? lowPCRExpiries.map(d => `${d.expiry}(PCR:${d.pcr.toFixed(2)})`).join(', ') : '无'}
-• 建议重点关注: ${top3Volume.map(d => d.expiry).join(', ')}`;
-
-      setAiSummary(summary);
-    } catch (error) {
-      setAiSummary('AI分析生成失败，请稍后重试。');
+        setAiSummary(fallbackSummary);
+      } catch (fallbackError) {
+        console.error('回退分析也失败:', fallbackError);
+        setAiSummary([{
+          type: 'error',
+          title: '分析失败',
+          icon: 'error',
+          items: [{
+            title: '错误信息',
+            value: '本地分析也失败，请检查数据',
+            valueColor: 'text-red-600',
+            subTitle: '请联系技术支持',
+            subValue: ''
+          }]
+        }]);
+      }
     } finally {
       setIsAILoading(false);
     }
@@ -329,27 +593,7 @@ const OptionOpenInterest = ({ className }: { className?: string }) => {
         </div>
         
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-sm">
-              <span className="text-theme-secondary relative group cursor-help">
-                PCR:
-                <span className="text-xs text-theme-tertiary ml-1">ⓘ</span>
-                {/* PCR悬浮提示 */}
-                <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10 max-w-xs">
-                  <div className="font-medium mb-1">Put/Call Ratio (PCR)</div>
-                  <div className="space-y-1">
-                    <div>• <span className="text-green-400">PCR &lt; 0.7</span>: 看涨情绪强烈</div>
-                    <div>• <span className="text-yellow-400">0.7 ≤ PCR ≤ 1.2</span>: 市场平衡</div>
-                    <div>• <span className="text-red-400">PCR &gt; 1.2</span>: 看跌情绪强烈</div>
-                  </div>
-                  <div className="mt-2 text-gray-300">
-                    当前PCR: {totalPCR.toFixed(2)} - {totalPCR < 0.7 ? '看涨主导' : totalPCR > 1.2 ? '看跌主导' : '多空平衡'}
-                  </div>
-                  {/* 小三角 */}
-                  <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
-                </div>
-              </span>
-            <span className="font-semibold text-theme-primary">{totalPCR.toFixed(2)}</span>
-          </div>
+          <MarketSentimentIndicator pcr={totalPCR} isVisible={!isLoading} />
           
           <div className="flex rounded border border-theme-stroke overflow-hidden">
             {viewModes.map(mode => (
@@ -364,18 +608,9 @@ const OptionOpenInterest = ({ className }: { className?: string }) => {
           </div>
           
           <div className="flex items-center gap-2">
-            <button 
-              className="px-2 py-1 text-xs font-medium bg-gradient-to-r from-[#0C68E9] to-[#B5E4CA] text-white rounded-md hover:from-[#0B58D9] hover:to-[#A5D4BA] transition-all duration-200 disabled:opacity-50"
-              title="AI总结"
-              onClick={handleAISummary}
-              disabled={isAILoading}
-            >
-              {isAILoading ? (
-                <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                'AI'
-              )}
-            </button>
+            <AIButton onClick={handleAISummary} isLoading={isAILoading}>
+              AI
+            </AIButton>
             <button 
               className="p-1 text-theme-secondary hover:text-theme-primary"
               onClick={() => setIsFullscreen(!isFullscreen)}
@@ -483,316 +718,9 @@ const OptionOpenInterest = ({ className }: { className?: string }) => {
             {/* 内容区域 */}
             <div className="p-6 overflow-y-auto max-h-[60vh]">
               {isAILoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <div className="w-12 h-12 border-3 border-[#0C68E9] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-gray-600 dark:text-gray-300 font-medium">AI正在分析数据...</p>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">请稍候，正在生成专业分析报告</p>
-                  </div>
-                </div>
+                <AILoadingAnimation message="AI正在分析数据..." />
               ) : (
-                <div className="space-y-6">
-                  {/* 关键数据点 */}
-                  <div className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800/30">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                      </div>
-                      <h4 className="text-lg font-bold text-gray-900 dark:text-white">关键数据点</h4>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">总Call持仓量</p>
-                        <p className="text-lg font-bold text-green-600">{totalCalls.toLocaleString()}</p>
-                      </div>
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">总Put持仓量</p>
-                        <p className="text-lg font-bold text-blue-600">{totalPuts.toLocaleString()}</p>
-                      </div>
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 relative group cursor-help">
-                          整体PCR
-                          <span className="text-xs text-gray-400 ml-1">ⓘ</span>
-                          {/* PCR悬浮提示 */}
-                          <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-20 max-w-xs">
-                            <div className="font-medium mb-1">整体Put/Call Ratio</div>
-                            <div className="space-y-1">
-                              <div>• <span className="text-green-400">PCR &lt; 0.7</span>: 看涨情绪强烈</div>
-                              <div>• <span className="text-yellow-400">0.7 ≤ PCR ≤ 1.2</span>: 市场平衡</div>
-                              <div>• <span className="text-red-400">PCR &gt; 1.2</span>: 看跌情绪强烈</div>
-                            </div>
-                            <div className="mt-2 text-gray-300">
-                              当前: {totalPCR.toFixed(2)} - {totalPCR < 0.7 ? '看涨主导' : totalPCR > 1.2 ? '看跌主导' : '多空平衡'}
-                            </div>
-                            {/* 小三角 */}
-                            <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
-                          </div>
-                        </p>
-                        <p className="text-lg font-bold text-gray-900 dark:text-white">{totalPCR.toFixed(2)}</p>
-                      </div>
-                                              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 relative group cursor-help">
-                            平均PCR
-                            <span className="text-xs text-gray-400 ml-1">ⓘ</span>
-                            {/* 平均PCR悬浮提示 */}
-                            <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-20 max-w-xs">
-                              <div className="font-medium mb-1">平均Put/Call Ratio</div>
-                              <div className="space-y-1">
-                                <div>• 所有到期日PCR的平均值</div>
-                                <div>• 反映整体市场情绪倾向</div>
-                                <div>• 与整体PCR对比可判断情绪分布</div>
-                              </div>
-                              <div className="mt-2 text-gray-300">
-                                当前: {(openInterestData.reduce((sum, d) => sum + d.pcr, 0) / openInterestData.length).toFixed(2)}
-                              </div>
-                              {/* 小三角 */}
-                              <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
-                            </div>
-                          </p>
-                          <p className="text-lg font-bold text-gray-900 dark:text-white">{(openInterestData.reduce((sum, d) => sum + d.pcr, 0) / openInterestData.length).toFixed(2)}</p>
-                        </div>
-                    </div>
-                  </div>
-
-                  {/* 市场情绪分析 */}
-                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800/30">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                      </div>
-                      <h4 className="text-lg font-bold text-gray-900 dark:text-white">市场情绪分析</h4>
-                    </div>
-                    <div className="space-y-3">
-                      {/* 整体情绪 */}
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">整体市场情绪</p>
-                        <div className="flex items-center gap-2">
-                          <div className={`w-4 h-4 rounded-full ${totalPCR > 1 ? 'bg-red-500' : totalPCR < 0.7 ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-                          <p className="text-sm text-gray-700 dark:text-gray-300">
-                            {totalPCR > 1 ? '看跌主导 - 投资者对下行风险较为担忧' : totalPCR < 0.7 ? '看涨主导 - 投资者对上行机会较为乐观' : '多空平衡 - 市场情绪相对均衡'}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      {/* PCR分布 */}
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">PCR分布统计</p>
-                        <div className="grid grid-cols-3 gap-2 text-xs">
-                          <div className="text-center">
-                            <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-1">
-                              <span className="text-white font-bold">{openInterestData.filter(d => d.pcr < 0.7).length}</span>
-                            </div>
-                            <p className="text-gray-500 dark:text-gray-400">看涨</p>
-                          </div>
-                          <div className="text-center">
-                            <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center mx-auto mb-1">
-                              <span className="text-white font-bold">{openInterestData.length - openInterestData.filter(d => d.pcr < 0.7).length - openInterestData.filter(d => d.pcr > 1.2).length}</span>
-                            </div>
-                            <p className="text-gray-500 dark:text-gray-400">平衡</p>
-                          </div>
-                          <div className="text-center">
-                            <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-1">
-                              <span className="text-white font-bold">{openInterestData.filter(d => d.pcr > 1.2).length}</span>
-                            </div>
-                            <p className="text-gray-500 dark:text-gray-400">看跌</p>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* 情绪变化趋势 */}
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">情绪强度分析</p>
-                        <div className="space-y-2 text-xs">
-                          <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-gray-300">平均PCR</span>
-                            <span className="font-medium">{(openInterestData.reduce((sum, d) => sum + d.pcr, 0) / openInterestData.length).toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-gray-600 dark:text-gray-300 relative group cursor-help">
-                              PCR标准差
-                              <span className="text-xs text-gray-400 ml-1">ⓘ</span>
-                              {/* PCR标准差悬浮提示 */}
-                              <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-20 max-w-xs">
-                                <div className="font-medium mb-1">PCR标准差</div>
-                                <div className="space-y-1">
-                                  <div>• 衡量各到期日PCR的离散程度</div>
-                                  <div>• <span className="text-green-400">标准差小</span>: 情绪一致性强</div>
-                                  <div>• <span className="text-red-400">标准差大</span>: 情绪分化明显</div>
-                                </div>
-                                {/* 小三角 */}
-                                <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
-                              </div>
-                            </span>
-                            <span className="font-medium">{(() => {
-                              const avg = openInterestData.reduce((sum, d) => sum + d.pcr, 0) / openInterestData.length;
-                              const variance = openInterestData.reduce((sum, d) => sum + Math.pow(d.pcr - avg, 2), 0) / openInterestData.length;
-                              return Math.sqrt(variance).toFixed(2);
-                            })()}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-gray-600 dark:text-gray-300 relative group cursor-help">
-                              情绪一致性
-                              <span className="text-xs text-gray-400 ml-1">ⓘ</span>
-                              {/* 情绪一致性悬浮提示 */}
-                              <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-20 max-w-xs">
-                                <div className="font-medium mb-1">情绪一致性</div>
-                                <div className="space-y-1">
-                                  <div>• <span className="text-green-400">高</span>: 标准差 &lt; 0.3，市场情绪统一</div>
-                                  <div>• <span className="text-yellow-400">中</span>: 0.3 ≤ 标准差 ≤ 0.6</div>
-                                  <div>• <span className="text-red-400">低</span>: 标准差 &gt; 0.6，情绪分化严重</div>
-                                </div>
-                                {/* 小三角 */}
-                                <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
-                              </div>
-                            </span>
-                            <span className="font-medium">{(() => {
-                              const avg = openInterestData.reduce((sum, d) => sum + d.pcr, 0) / openInterestData.length;
-                              const variance = openInterestData.reduce((sum, d) => sum + Math.pow(d.pcr - avg, 2), 0) / openInterestData.length;
-                              const std = Math.sqrt(variance);
-                              return std < 0.3 ? '高' : std < 0.6 ? '中' : '低';
-                            })()}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 市场洞察 */}
-                  <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 rounded-xl p-4 border border-yellow-100 dark:border-yellow-800/30">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-8 h-8 bg-yellow-500 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                        </svg>
-                      </div>
-                      <h4 className="text-lg font-bold text-gray-900 dark:text-white">市场洞察</h4>
-                    </div>
-                    <div className="space-y-3">
-                      {/* 持仓量集中度分析 */}
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white mb-2 relative group cursor-help">
-                          持仓量集中度分析
-                          <span className="text-xs text-gray-400 ml-1">ⓘ</span>
-                          {/* 持仓量集中度悬浮提示 */}
-                          <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-20 max-w-xs">
-                            <div className="font-medium mb-1">持仓量集中度</div>
-                            <div className="space-y-1">
-                              <div>• 衡量持仓量在单个到期日的集中程度</div>
-                              <div>• <span className="text-orange-400">占比高</span>: 该到期日可能成为关键价位</div>
-                              <div>• <span className="text-blue-400">占比低</span>: 持仓量分布相对均匀</div>
-                            </div>
-                            {/* 小三角 */}
-                            <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
-                          </div>
-                        </p>
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div>
-                            <p className="text-gray-500 dark:text-gray-400">最大Call持仓占比</p>
-                            <p className="font-bold text-green-600">{((Math.max(...openInterestData.map(d => d.calls)) / openInterestData.reduce((sum, d) => sum + d.calls + d.puts, 0)) * 100).toFixed(1)}%</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-500 dark:text-gray-400">最大Put持仓占比</p>
-                            <p className="font-bold text-blue-600">{((Math.max(...openInterestData.map(d => d.puts)) / openInterestData.reduce((sum, d) => sum + d.calls + d.puts, 0)) * 100).toFixed(1)}%</p>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* 市场情绪分布 */}
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">市场情绪分布</p>
-                        <div className="flex items-center gap-4 text-xs">
-                          <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                            <span>看涨: {openInterestData.filter(d => d.pcr < 0.7).length}个</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                            <span>看跌: {openInterestData.filter(d => d.pcr > 1.2).length}个</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
-                            <span>平衡: {openInterestData.length - openInterestData.filter(d => d.pcr < 0.7).length - openInterestData.filter(d => d.pcr > 1.2).length}个</span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* 关键到期日 */}
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">关键到期日</p>
-                        <div className="space-y-1 text-xs">
-                          {[...openInterestData].sort((a, b) => (b.calls + b.puts) - (a.calls + a.puts)).slice(0, 3).map((item, index) => (
-                            <div key={index} className="flex justify-between">
-                              <span className="text-gray-600 dark:text-gray-300">{item.expiry}</span>
-                              <span className="font-medium">{(item.calls + item.puts).toLocaleString()}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 风险提示 */}
-                  <div className="bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 rounded-xl p-4 border border-red-100 dark:border-red-800/30">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                        </svg>
-                      </div>
-                      <h4 className="text-lg font-bold text-gray-900 dark:text-white">风险预警</h4>
-                    </div>
-                    <div className="space-y-3">
-                      {/* 高PCR风险 */}
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-2">高PCR风险到期日</p>
-                        <div className="space-y-1 text-xs">
-                          {openInterestData.filter(d => d.pcr > 1.2).map((item, index) => (
-                            <div key={index} className="flex justify-between">
-                              <span className="text-gray-600 dark:text-gray-300">{item.expiry}</span>
-                              <span className="font-medium text-red-600">PCR: {item.pcr.toFixed(2)}</span>
-                            </div>
-                          ))}
-                          {openInterestData.filter(d => d.pcr > 1.2).length === 0 && (
-                            <span className="text-gray-500 dark:text-gray-400">无高风险到期日</span>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* 低PCR风险 */}
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-sm font-medium text-green-600 dark:text-green-400 mb-2">低PCR风险到期日</p>
-                        <div className="space-y-1 text-xs">
-                          {openInterestData.filter(d => d.pcr < 0.5).map((item, index) => (
-                            <div key={index} className="flex justify-between">
-                              <span className="text-gray-600 dark:text-gray-300">{item.expiry}</span>
-                              <span className="font-medium text-green-600">PCR: {item.pcr.toFixed(2)}</span>
-                            </div>
-                          ))}
-                          {openInterestData.filter(d => d.pcr < 0.5).length === 0 && (
-                            <span className="text-gray-500 dark:text-gray-400">无低风险到期日</span>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* 持仓量集中风险 */}
-                      <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                        <p className="text-sm font-medium text-orange-600 dark:text-orange-400 mb-2">持仓量集中风险</p>
-                        <div className="space-y-1 text-xs">
-                          {[...openInterestData].sort((a, b) => (b.calls + b.puts) - (a.calls + a.puts)).slice(0, 3).map((item, index) => (
-                            <div key={index} className="flex justify-between">
-                              <span className="text-gray-600 dark:text-gray-300">{item.expiry}</span>
-                              <span className="font-medium text-orange-600">{(item.calls + item.puts).toLocaleString()}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <AIAnalysisResult summary={aiSummary} isVisible={!isAILoading} />
               )}
             </div>
 

@@ -2,17 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('[OpenAI Test] 开始测试API配置');
+    console.log('[OpenAI Test] 开始测试OpenAI配置');
     
-    // 检查环境变量
+    // 获取OpenAI API密钥
     const openaiApiKey = process.env.OPENAI_API_KEY;
     console.log('[OpenAI Test] API密钥状态:', openaiApiKey ? '已配置' : '未配置');
     
     if (!openaiApiKey) {
-      return NextResponse.json({
+      return NextResponse.json({ 
         status: 'error',
         message: 'OpenAI API密钥未配置',
         details: '请在.env.local文件中配置OPENAI_API_KEY环境变量'
+      });
+    }
+
+    if (openaiApiKey === 'sk-your-openai-api-key-here') {
+      return NextResponse.json({ 
+        status: 'error',
+        message: 'OpenAI API密钥未更新',
+        details: '请更新.env.local文件中的OPENAI_API_KEY为有效的API密钥'
       });
     }
 
@@ -25,34 +33,30 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    console.log('[OpenAI Test] OpenAI API测试响应状态:', response.status);
-
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('[OpenAI Test] OpenAI API测试失败:', errorData);
-      return NextResponse.json({
+      return NextResponse.json({ 
         status: 'error',
         message: 'OpenAI API连接失败',
         details: errorData.error?.message || '未知错误',
-        httpStatus: response.status
+        statusCode: response.status
       });
     }
 
     const result = await response.json();
-    console.log('[OpenAI Test] OpenAI API测试成功');
-
-    return NextResponse.json({
+    
+    return NextResponse.json({ 
       status: 'success',
-      message: 'OpenAI API配置正确',
-      availableModels: result.data?.length || 0,
-      apiStatus: 'connected'
+      message: 'OpenAI API配置正常',
+      details: `可用模型数量: ${result.data?.length || 0}`,
+      models: result.data?.slice(0, 5).map((model: any) => model.id) || []
     });
 
   } catch (error) {
-    console.error('[OpenAI Test] 测试过程出错:', error);
-    return NextResponse.json({
+    console.error('[OpenAI Test] 测试错误:', error);
+    return NextResponse.json({ 
       status: 'error',
-      message: '测试过程出错',
+      message: '测试过程中发生错误',
       details: error instanceof Error ? error.message : '未知错误'
     });
   }

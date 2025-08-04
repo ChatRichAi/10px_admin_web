@@ -181,7 +181,26 @@ const VolSmile = ({ className }: { className?: string }) => {
       if (!response.ok) {
         const errorData = await response.json();
         console.error('[VolSmile] OpenAI API错误详情:', errorData);
-        throw new Error(`AI分析请求失败: ${errorData.error || '未知错误'}`);
+        
+        // 根据错误代码提供更友好的错误信息
+        let errorMessage = 'AI分析请求失败';
+        if (errorData.code === 'API_KEY_MISSING') {
+          errorMessage = 'OpenAI API密钥未配置，请联系管理员';
+        } else if (errorData.code === 'API_KEY_INVALID') {
+          errorMessage = 'OpenAI API密钥无效，请联系管理员';
+        } else if (errorData.code === 'AUTH_FAILED') {
+          errorMessage = 'OpenAI API认证失败，请稍后重试';
+        } else if (errorData.code === 'RATE_LIMIT') {
+          errorMessage = 'API调用频率过高，请稍后重试';
+        } else if (errorData.code === 'EMPTY_RESPONSE') {
+          errorMessage = 'AI响应为空，请稍后重试';
+        } else if (errorData.code === 'PARSE_ERROR') {
+          errorMessage = 'AI响应格式错误，请稍后重试';
+        } else {
+          errorMessage = `AI分析请求失败: ${errorData.error || '未知错误'}`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -196,6 +215,21 @@ const VolSmile = ({ className }: { className?: string }) => {
 
     } catch (error) {
       console.error('AI分析错误:', error);
+      
+      // 显示错误信息给用户
+      setAiSummary([{
+        type: 'error',
+        title: 'AI分析失败',
+        icon: 'error',
+        items: [{
+          title: '错误信息',
+          value: error.message || '未知错误',
+          valueColor: 'text-red-600',
+          subTitle: '请稍后重试或联系管理员',
+          subValue: ''
+        }]
+      }]);
+      
       // 如果OpenAI失败，回退到本地分析
       try {
         const fallbackSummary = [

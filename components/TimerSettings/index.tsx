@@ -484,7 +484,7 @@ const TimerSettingsModal: React.FC<TimerSettingsModalProps> = ({ settings, onSav
               </li>
               <li className="flex items-start gap-2">
                 <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                <span>建议先点击"测试推送"验证配置</span>
+                <span>建议先点击&quot;测试推送&quot;验证配置</span>
               </li>
             </ul>
           </div>
