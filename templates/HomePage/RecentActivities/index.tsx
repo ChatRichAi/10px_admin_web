@@ -9,7 +9,7 @@ const RecentActivities = ({}: RecentActivitiesProps) => {
     return (
         <Card
             className="w-[calc(50%-0.5rem)] mx-1 lg:w-full lg:mx-0"
-            title="OI持仓异动（施工中...）"
+            title="竞价异动"
             tooltip="Tooltip recent activities"
             seeAllUrl="/"
         >

@@ -51,7 +51,7 @@ const Balance = ({}: BalanceProps) => {
     return (
         <Card
             className="flex-1 h-full" // 确保卡片高度与TrendBoard模块一致
-            title="交易分析（施工中...）"
+            title="大盘指数"
             arrowTitle
             option={time}
             setOption={setTime}

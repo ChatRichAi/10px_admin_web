@@ -12,7 +12,7 @@ const TopTokens = ({}: TopTokensProps) => {
     return (
         <Card
             className="flex-1"
-            title="交易机会TEST"
+            title="短线精灵"
             tooltip="根据OI异动及价格变化，识别交易机会"
             seeAllUrl="/"
         >

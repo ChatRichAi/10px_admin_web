@@ -13,7 +13,7 @@ export const navigation = [
     },
     {
         id: "2",
-        title: "资产中心",
+        title: "交易面板",
         icon: "wallet",
         url: "/my-assets",
     },
@@ -37,18 +37,30 @@ export const navigation = [
     },
     {
         id: "5",
+        title: "A股分析",
+        icon: "chart",
+        url: "/a-shares-analysis",
+    },
+    {
+        id: "6",
         title: "投财问道",
         icon: "star-plus",
         url: "/chat",
     },
     {
-        id: "6",
+        id: "7",
+        title: "策略工作流",
+        icon: "settings",
+        url: "/ai-workflow",
+    },
+    {
+        id: "9",
         title: "付费计划",
         icon: "star",
         url: "/pricing",
     },
     {
-        id: "7",
+        id: "10",
         title: "用户设置",
         icon: "settings",
         url: "/settings",

@@ -46,3 +46,9 @@ admin-dashboard/build/
 
 # test files
 test_openai_api.js
+
+# panda quantflow (separate repository)
+panda_quantflow/
+
+# codebuddy
+.codebuddy/

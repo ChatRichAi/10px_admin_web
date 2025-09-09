@@ -32,7 +32,7 @@ const TrendBoard = () => {
     return (
         <Card
             className="flex-1 h-full" // 确保卡片高度与Balance模块一致
-            title="趋势看板"
+            title="机会看板"
             tooltip="周期共振红绿灯，红看跌绿看涨橙等待，趋势无时需蛰伏"
             seeAllUrl="/trend-board"
         >
