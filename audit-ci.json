@@ -1,0 +1,7 @@
+{
+  "audit-ci": {
+    "moderate": true,
+    "high": true,
+    "critical": true
+  }
+}
