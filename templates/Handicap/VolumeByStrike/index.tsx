@@ -376,6 +376,36 @@ const VolumeByStrike = ({ className }: { className?: string }) => {
       
       // 如果OpenAI失败，回退到本地分析
       try {
+        // 检查数据是否有效
+        if (!filteredData || filteredData.length === 0) {
+          throw new Error('没有可用的成交量数据进行分析');
+        }
+
+        // 重新计算回退分析需要的数据
+        const maxCalls = Math.max(...filteredData.map(d => d.calls));
+        const maxPuts = Math.max(...filteredData.map(d => d.puts));
+        const maxCallsStrike = filteredData.find(d => d.calls === maxCalls)?.strike;
+        const maxPutsStrike = filteredData.find(d => d.puts === maxPuts)?.strike;
+        
+        // 计算成交量集中度
+        const totalVolume = filteredData.reduce((sum, d) => sum + d.calls + d.puts, 0);
+        const maxCallsPercent = (maxCalls / totalVolume) * 100;
+        const maxPutsPercent = (maxPuts / totalVolume) * 100;
+        
+        // 分析成交量分布
+        const sortedByVolume = [...filteredData].sort((a, b) => (b.calls + b.puts) - (a.calls + a.puts));
+        const top5Volume = sortedByVolume.slice(0, 5);
+        
+        // 分析行权价分布
+        const avgStrike = filteredData.reduce((sum, d) => sum + d.strike, 0) / filteredData.length;
+        const highStrikeData = filteredData.filter(d => d.strike > avgStrike);
+        const lowStrikeData = filteredData.filter(d => d.strike < avgStrike);
+        
+        // 计算市场情绪指标
+        const callDominantStrikes = filteredData.filter(d => d.calls > d.puts * 1.5).length;
+        const putDominantStrikes = filteredData.filter(d => d.puts > d.calls * 1.5).length;
+        const balancedStrikes = filteredData.length - callDominantStrikes - putDominantStrikes;
+
         const fallbackSummary = [
           {
             type: 'stats',
@@ -542,9 +572,9 @@ const VolumeByStrike = ({ className }: { className?: string }) => {
           icon: 'error',
           items: [{
             title: '错误信息',
-            value: '本地分析也失败，请检查数据',
+            value: fallbackError instanceof Error ? fallbackError.message : '本地分析也失败，请检查数据',
             valueColor: 'text-red-600',
-            subTitle: '请联系技术支持',
+            subTitle: '请检查数据源或联系技术支持',
             subValue: ''
           }]
         }]);

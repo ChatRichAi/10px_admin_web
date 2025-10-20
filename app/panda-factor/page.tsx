@@ -200,13 +200,13 @@ const PandaFactorPage = () => {
               </p>
               <div className="space-y-2">
                 <button 
-                  onClick={() => alert('因子库管理功能正在开发中...')}
+                  onClick={() => window.location.href = '/factor-analysis'}
                   className="w-full px-4 py-2 bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white font-medium rounded-lg transition-all duration-200"
                 >
                   管理因子库
                 </button>
                 <p className="text-xs text-theme-tertiary text-center">
-                  即将推出
+                  已集成因子分析功能
                 </p>
               </div>
             </div>

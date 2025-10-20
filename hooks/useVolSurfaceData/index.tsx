@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useCache, generateCacheKey } from '@/lib/cache';
 
 // 定义数据类型
 export interface VolSurfaceData {
@@ -69,18 +70,65 @@ export const useVolSurfaceData = (
   const [error, setError] = useState<string | null>(null);
   const [lastSymbol, setLastSymbol] = useState<string>(symbol);
 
+  const { getCached, setCached, isCacheValid } = useCache();
+
   // 获取波动率平面数据
   const fetchData = useCallback(async (targetSymbol: string) => {
     setLoading(true);
     setError(null);
 
+    // 生成缓存键
+    const cacheKey = generateCacheKey('vol-surface', { symbol: targetSymbol });
+
+    // 检查缓存
+    const cachedData = getCached<VolSurfaceData>(cacheKey);
+    if (cachedData && isCacheValid(cacheKey)) {
+      console.log('Using cached vol surface data for', targetSymbol);
+      setData(cachedData);
+      setLoading(false);
+      return;
+    }
+
     try {
-      // 直接请求新的API
-      const apiUrl = `http://103.106.191.243:8000/model_vol_surface_matrix`;
-      const response = await fetch(apiUrl);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      // 尝试直接请求API
+      const apiUrl = `http://103.106.191.243:8001/deribit/option/vol_surface?symbol=${targetSymbol}&expiries_count=12`;
+      let response: Response;
+      
+      try {
+        // 添加超时控制和CORS处理
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 减少到8秒超时
+        
+        response = await fetch(apiUrl, {
+          method: 'GET',
+          mode: 'cors', // 明确指定CORS模式
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+      } catch (fetchError) {
+        // 如果直接请求失败，尝试通过代理API
+        console.log('Direct API failed, trying proxy...', fetchError);
+        const proxyUrl = `/api/proxy-vol-surface?url=${encodeURIComponent(apiUrl)}`;
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000); // 减少到12秒超时
+        
+        response = await fetch(proxyUrl, {
+          method: 'GET',
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
       }
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
+      }
+      
       const result = await response.json();
 
       // 直接适配返回格式
@@ -101,20 +149,31 @@ export const useVolSurfaceData = (
       // 验证数据格式
       if (validateVolSurfaceData(transformedData)) {
         setData(transformedData);
+        // 缓存数据
+        setCached(cacheKey, transformedData, 3 * 60 * 1000); // 3分钟缓存
       } else {
         throw new Error('Invalid data format received from API');
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '获取数据失败';
-      setError(errorMessage);
-
-      // 如果API失败，使用默认数据
-      if (!data) {
-        setData({
-          ...defaultData,
-          symbol: targetSymbol
-        });
+      let errorMessage = '获取数据失败';
+      
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          errorMessage = '请求超时，请检查网络连接';
+        } else if (err.message.includes('Failed to fetch')) {
+          errorMessage = '网络连接失败，可能是CORS问题或服务器不可用';
+        } else if (err.message.includes('HTTP error')) {
+          errorMessage = `服务器错误: ${err.message}`;
+        } else {
+          errorMessage = err.message;
+        }
       }
+      
+      console.error('VolSurfaceData fetch error:', err);
+      setError(errorMessage);
+      
+      // 不使用模拟数据，只显示错误信息
+      console.log('API failed, no fallback to default data');
     } finally {
       setLoading(false);
     }

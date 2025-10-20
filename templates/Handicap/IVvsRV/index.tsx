@@ -429,7 +429,22 @@ const IVvsRV = ({ className }: { className?: string }) => {
       
       if (!response.ok) {
         const errorData = await response.json();
-        setAiSummary([{ type: 'error', title: errorData.error || 'AI分析请求失败', items: [] }]);
+        const errorMessage = errorData.error?.message || errorData.error || 'AI分析请求失败';
+        console.error('[IVvsRV] OpenAI API错误:', errorData);
+        
+        // 如果是认证错误，使用本地分析作为fallback
+        if (response.status === 401) {
+          console.log('[IVvsRV] API认证失败，使用本地分析');
+          try {
+            const localAnalysis = generateLocalAnalysis(data, selectedTerms);
+            setAiSummary(localAnalysis);
+            return;
+          } catch (localError) {
+            console.error('[IVvsRV] 本地分析也失败:', localError);
+          }
+        }
+        
+        setAiSummary([{ type: 'error', title: errorMessage, items: [] }]);
         return;
       }
       
@@ -446,7 +461,14 @@ const IVvsRV = ({ className }: { className?: string }) => {
         setAiSummary([{ type: 'error', title: 'AI返回内容为空或格式错误', items: [] }]);
       }
     } catch (error: any) {
-      setAiSummary([{ type: 'error', title: error?.message || 'AI分析生成失败，请稍后重试。', items: [] }]);
+      console.error('[IVvsRV] AI分析错误:', error);
+      // 使用本地分析作为fallback
+      try {
+        const localAnalysis = generateLocalAnalysis(data, selectedTerms);
+        setAiSummary(localAnalysis);
+      } catch (localError) {
+        setAiSummary([{ type: 'error', title: 'AI分析失败，本地分析也失败', items: [] }]);
+      }
     } finally {
       setIsAILoading(false);
     }

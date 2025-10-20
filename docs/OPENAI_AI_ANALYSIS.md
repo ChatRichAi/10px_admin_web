@@ -1,13 +1,13 @@
-# OpenAI驱动的AI分析功能
+# DeepSeek驱动的AI分析功能
 
 ## 概述
 
-本项目已集成OpenAI API，为波动率微笑等期权数据提供智能分析功能。AI分析将替代原有的本地数据分析，提供更专业、更深入的金融市场洞察。
+本项目已集成DeepSeek API，为波动率微笑等期权数据提供智能分析功能。AI分析将替代原有的本地数据分析，提供更专业、更深入的金融市场洞察。
 
 ## 功能特点
 
 ### 🤖 智能分析
-- 基于GPT-4模型的专业期权市场分析
+- 基于DeepSeek v3模型的专业期权市场分析
 - 自动识别关键市场趋势和风险因素
 - 提供结构化的分析报告
 
@@ -18,14 +18,14 @@
 - 风险提示和建议
 
 ### 🔄 容错机制
-- OpenAI API失败时自动回退到本地分析
+- DeepSeek API失败时自动回退到本地分析
 - 确保功能的稳定性和可用性
 
 ## 配置步骤
 
-### 1. 获取OpenAI API密钥
+### 1. 获取DeepSeek API密钥
 
-1. 访问 [OpenAI官网](https://platform.openai.com/)
+1. 访问 [DeepSeek官网](https://platform.deepseek.com/)
 2. 注册或登录账户
 3. 进入API Keys页面
 4. 创建新的API密钥
@@ -36,11 +36,12 @@
 在项目根目录创建 `.env.local` 文件，添加以下配置：
 
 ```bash
-# OpenAI 配置
-OPENAI_API_KEY=sk-your-actual-openai-api-key-here
+# DeepSeek 配置
+OPENAI_API_KEY=sk-your-actual-deepseek-api-key-here
+OPENAI_BASE_URL=https://api.deepseek.com/v1
 ```
 
-**注意：** 请将 `sk-your-actual-openai-api-key-here` 替换为您的真实OpenAI API密钥。
+**注意：** 请将 `sk-your-actual-deepseek-api-key-here` 替换为您的真实DeepSeek API密钥。
 
 ### 3. 重启开发服务器
 
@@ -194,8 +195,9 @@ console.log('OpenAI API调用详情');
 
 ## 更新日志
 
+- **v2.0.0** - 升级到DeepSeek v3模型
 - **v1.0.0** - 初始版本，支持波动率微笑AI分析
-- 集成GPT-4模型
+- 集成DeepSeek v3模型
 - 实现结构化输出
 - 添加容错机制
 

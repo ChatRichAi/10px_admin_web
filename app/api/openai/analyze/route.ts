@@ -2,29 +2,31 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('[OpenAI API] 开始处理请求');
+    console.log('[DeepSeek API] 开始处理请求');
     
     const { data, analysisType, prompt } = await request.json();
-    console.log('[OpenAI API] 请求数据:', { analysisType, prompt: prompt?.substring(0, 100) + '...' });
+    console.log('[DeepSeek API] 请求数据:', { analysisType, prompt: prompt?.substring(0, 100) + '...' });
     
-    // 获取OpenAI API密钥
-    const openaiApiKey = process.env.OPENAI_API_KEY;
-    console.log('[OpenAI API] API密钥状态:', openaiApiKey ? '已配置' : '未配置');
+    // 获取DeepSeek API密钥和基础URL
+    const deepseekApiKey = process.env.OPENAI_API_KEY;
+    const deepseekBaseUrl = process.env.OPENAI_BASE_URL || 'https://api.deepseek.com/v1';
+    console.log('[DeepSeek API] API密钥状态:', deepseekApiKey ? '已配置' : '未配置');
+    console.log('[DeepSeek API] 基础URL:', deepseekBaseUrl);
     
-    if (!openaiApiKey) {
-      console.log('[OpenAI API] 错误: API密钥未配置');
+    if (!deepseekApiKey) {
+      console.log('[DeepSeek API] 错误: API密钥未配置');
       return NextResponse.json({ 
-        error: 'OpenAI API密钥未配置',
+        error: 'DeepSeek API密钥未配置',
         details: '请在.env.local文件中配置OPENAI_API_KEY环境变量',
         code: 'API_KEY_MISSING'
       }, { status: 500 });
     }
 
-    if (openaiApiKey === 'sk-your-openai-api-key-here') {
-      console.log('[OpenAI API] 错误: API密钥未更新');
+    if (deepseekApiKey === 'sk-your-openai-api-key-here') {
+      console.log('[DeepSeek API] 错误: API密钥未更新');
       return NextResponse.json({ 
-        error: 'OpenAI API密钥未更新',
-        details: '请更新.env.local文件中的OPENAI_API_KEY为有效的API密钥',
+        error: 'DeepSeek API密钥未更新',
+        details: '请更新.env.local文件中的OPENAI_API_KEY为有效的DeepSeek API密钥',
         code: 'API_KEY_INVALID'
       }, { status: 500 });
     }
@@ -172,23 +174,23 @@ IV vs RV五大关键特征分析要求：
 6. 必须包含套利机会分析模块，这是强制要求
 7. 对于IV vs RV分析，必须包含预期偏差、期限结构、交易信号、情绪与流动性、风险预警五大关键特征`;
 
-    console.log('[OpenAI API] 开始调用OpenAI API');
+    console.log('[DeepSeek API] 开始调用DeepSeek API');
     
-    // 调用OpenAI API，添加重试机制
+    // 调用DeepSeek API，添加重试机制
     let response;
     let retryCount = 0;
     const maxRetries = 2;
     
     while (retryCount <= maxRetries) {
       try {
-        response = await fetch('https://api.openai.com/v1/chat/completions', {
+        response = await fetch(`${deepseekBaseUrl}/chat/completions`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${openaiApiKey}`,
+            'Authorization': `Bearer ${deepseekApiKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'gpt-3.5-turbo',
+            model: 'deepseek-chat',
             messages: [
               {
                 role: 'system',
@@ -204,20 +206,20 @@ IV vs RV五大关键特征分析要求：
           })
         });
         
-        console.log('[OpenAI API] OpenAI响应状态:', response.status);
+        console.log('[DeepSeek API] DeepSeek响应状态:', response.status);
         
         if (response.ok) {
           break; // 成功响应，跳出重试循环
         }
         
         const errorData = await response.json();
-        console.error('[OpenAI API] OpenAI API错误:', errorData);
+        console.error('[DeepSeek API] DeepSeek API错误:', errorData);
         
         // 如果是认证错误，直接返回，不需要重试
         if (response.status === 401) {
           return NextResponse.json({ 
-            error: 'OpenAI API认证失败',
-            details: 'API密钥无效或已过期，请检查并更新API密钥',
+            error: 'DeepSeek API认证失败',
+            details: 'API密钥无效或已过期，请检查并更新DeepSeek API密钥',
             code: 'AUTH_FAILED',
             status: response.status
           }, { status: 401 });
@@ -225,7 +227,7 @@ IV vs RV五大关键特征分析要求：
         
         // 如果是速率限制，等待后重试
         if (response.status === 429 && retryCount < maxRetries) {
-          console.log(`[OpenAI API] 速率限制，等待 ${(retryCount + 1) * 2} 秒后重试...`);
+          console.log(`[DeepSeek API] 速率限制，等待 ${(retryCount + 1) * 2} 秒后重试...`);
           await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 2000));
           retryCount++;
           continue;
@@ -233,16 +235,16 @@ IV vs RV五大关键特征分析要求：
         
         // 其他错误，返回错误信息
         return NextResponse.json({ 
-          error: 'OpenAI API调用失败',
+          error: 'DeepSeek API调用失败',
           details: errorData.error?.message || '未知错误',
           code: 'API_ERROR',
           status: response.status
         }, { status: 500 });
         
       } catch (fetchError) {
-        console.error('[OpenAI API] 网络请求错误:', fetchError);
+        console.error('[DeepSeek API] 网络请求错误:', fetchError);
         if (retryCount < maxRetries) {
-          console.log(`[OpenAI API] 网络错误，等待 ${(retryCount + 1) * 2} 秒后重试...`);
+          console.log(`[DeepSeek API] 网络错误，等待 ${(retryCount + 1) * 2} 秒后重试...`);
           await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 2000));
           retryCount++;
           continue;
@@ -252,25 +254,25 @@ IV vs RV五大关键特征分析要求：
     }
 
     const result = await response.json();
-    console.log('[OpenAI API] OpenAI响应成功');
+    console.log('[DeepSeek API] DeepSeek响应成功');
     
     const aiResponse = result.choices[0]?.message?.content;
-    console.log('[OpenAI API] AI响应内容长度:', aiResponse?.length || 0);
+    console.log('[DeepSeek API] AI响应内容长度:', aiResponse?.length || 0);
 
     if (!aiResponse) {
-      console.log('[OpenAI API] 错误: AI响应为空');
+      console.log('[DeepSeek API] 错误: AI响应为空');
       return NextResponse.json({ 
         error: 'AI响应为空',
-        details: 'OpenAI返回的响应内容为空',
+        details: 'DeepSeek返回的响应内容为空',
         code: 'EMPTY_RESPONSE'
       }, { status: 500 });
     }
 
     // 尝试解析JSON响应
     try {
-      console.log('[OpenAI API] 开始解析JSON响应');
+      console.log('[DeepSeek API] 开始解析JSON响应');
       const parsedResponse = JSON.parse(aiResponse);
-      console.log('[OpenAI API] JSON解析成功');
+      console.log('[DeepSeek API] JSON解析成功');
       
       // 验证响应格式
       if (!parsedResponse.summary || !Array.isArray(parsedResponse.summary)) {
@@ -284,8 +286,8 @@ IV vs RV五大关键特征分析要求：
       
       return NextResponse.json({ summary: parsedResponse.summary });
     } catch (parseError) {
-      console.error('[OpenAI API] JSON解析错误:', parseError);
-      console.log('[OpenAI API] 原始AI响应:', aiResponse);
+      console.error('[DeepSeek API] JSON解析错误:', parseError);
+      console.log('[DeepSeek API] 原始AI响应:', aiResponse);
       // 如果解析失败，返回错误
       return NextResponse.json({ 
         error: 'AI响应格式错误',
@@ -296,7 +298,7 @@ IV vs RV五大关键特征分析要求：
     }
 
   } catch (error) {
-    console.error('[OpenAI API] API处理错误:', error);
+    console.error('[DeepSeek API] API处理错误:', error);
     return NextResponse.json({ 
       error: '服务器内部错误',
       details: error instanceof Error ? error.message : '未知错误',

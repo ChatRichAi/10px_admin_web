@@ -54,13 +54,25 @@ export const navigation = [
         url: "/ai-workflow",
     },
     {
+        id: "8",
+        title: "因子分析",
+        icon: "chart",
+        url: "/factor-analysis",
+    },
+    {
         id: "9",
+        title: "PandaFactor",
+        icon: "star",
+        url: "/panda-factor",
+    },
+    {
+        id: "10",
         title: "付费计划",
         icon: "star",
         url: "/pricing",
     },
     {
-        id: "10",
+        id: "11",
         title: "用户设置",
         icon: "settings",
         url: "/settings",

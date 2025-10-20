@@ -148,7 +148,11 @@ const TermStructure = ({ className }: { className?: string }) => {
         structure,
         sentiment,
         risk,
-        contractInfo
+        contractInfo,
+        dataTimestamp: new Date().toISOString(),
+        dataDate: new Date().toLocaleDateString('zh-CN'),
+        dataTime: new Date().toLocaleTimeString('zh-CN'),
+        isRealTimeData: true
       };
       // 调用OpenAI API
       try {
@@ -163,7 +167,7 @@ const TermStructure = ({ className }: { className?: string }) => {
           body: JSON.stringify({
             data: analysisData,
             analysisType: 'term_structure',
-            prompt: `请分析BTC期限结构（ATM波动率随到期日变化）数据，生成结构化的期权市场分析报告。请严格按照以下要求返回结构化JSON，所有模块都必须出现，不可省略：\n\n1. 核心统计指标\n2. 期限结构特征\n3. 市场情绪洞察（必须包含“套利机会”字段，内容为对当前市场套利机会的简要评估）\n4. 套利机会详情（必须为单独模块，内容包括：历史均值套利、跨期限套利、回归套利，每项都要有title、value、subTitle、subValue）\n5. 风险提示\n6. AI操作建议（必须包含“套利策略”字段，内容为针对当前市场的套利操作建议）\n\n可用合约信息如下（每个到期日的可用行权价、现货价）：${JSON.stringify(contractInfo)}。\n\nJSON结构示例：\n{\n  "summary": [\n    { "type": "core", "title": "核心统计指标", "icon": "stats", "items": [ ... ] },\n    { "type": "structure", "title": "期限结构特征", "icon": "structure", "items": [ ... ] },\n    { "type": "sentiment", "title": "市场情绪洞察", "icon": "sentiment", "items": [ { "title": "套利机会", "value": "...", "subTitle": "...", "subValue": "..." } ] },\n    { "type": "arbitrage", "title": "套利机会详情", "icon": "arbitrage", "items": [ { "title": "历史均值套利", "value": "...", "subTitle": "...", "subValue": "..." }, { "title": "跨期限套利", "value": "...", "subTitle": "...", "subValue": "..." }, { "title": "回归套利", "value": "...", "subTitle": "...", "subValue": "..." } ] },\n    { "type": "risk", "title": "风险提示", "icon": "risk", "items": [ ... ] },\n    { "type": "advice", "title": "AI操作建议", "icon": "advice", "items": [ { "title": "套利策略", "value": "...", "subTitle": "...", "subValue": "..." } ] }\n  ]\n}\n\n注意：所有模块都必须出现，哪怕内容为空也要有结构。“套利机会详情”必须为单独模块且有三项，“AI操作建议”必须有“套利策略”。不要输出任何多余的解释或说明，只返回JSON。如未包含套利机会相关模块，将被判定为无效回答。`
+            prompt: `请分析BTC期限结构（ATM波动率随到期日变化）数据，生成结构化的期权市场分析报告。\n\n【重要】这是基于${analysisData.dataDate} ${analysisData.dataTime}的实时数据进行的分析，请确保所有分析都基于当前最新的市场数据。\n\n请严格按照以下要求返回结构化JSON，所有模块都必须出现，不可省略：\n\n1. 核心统计指标（必须包含数据时间戳）\n2. 期限结构特征\n3. 市场情绪洞察（必须包含"套利机会"字段，内容为对当前市场套利机会的简要评估）\n4. 套利机会详情（必须为单独模块，内容包括：历史均值套利、跨期限套利、回归套利，每项都要有title、value、subTitle、subValue）\n5. 风险提示\n6. AI操作建议（必须包含"套利策略"字段，内容为针对当前市场的套利操作建议）\n\n可用合约信息如下（每个到期日的可用行权价、现货价）：${JSON.stringify(contractInfo)}。\n\n当前实时数据时间戳：${analysisData.dataTimestamp}\n\nJSON结构示例：\n{\n  "summary": [\n    { "type": "core", "title": "核心统计指标", "icon": "stats", "items": [ { "title": "数据时间", "value": "${analysisData.dataDate} ${analysisData.dataTime}", "subTitle": "实时数据", "subValue": "最新" } ] },\n    { "type": "structure", "title": "期限结构特征", "icon": "structure", "items": [ ... ] },\n    { "type": "sentiment", "title": "市场情绪洞察", "icon": "sentiment", "items": [ { "title": "套利机会", "value": "...", "subTitle": "...", "subValue": "..." } ] },\n    { "type": "arbitrage", "title": "套利机会详情", "icon": "arbitrage", "items": [ { "title": "历史均值套利", "value": "...", "subTitle": "...", "subValue": "..." }, { "title": "跨期限套利", "value": "...", "subTitle": "...", "subValue": "..." }, { "title": "回归套利", "value": "...", "subTitle": "...", "subValue": "..." } ] },\n    { "type": "risk", "title": "风险提示", "icon": "risk", "items": [ ... ] },\n    { "type": "advice", "title": "AI操作建议", "icon": "advice", "items": [ { "title": "套利策略", "value": "...", "subTitle": "...", "subValue": "..." } ] }\n  ]\n}\n\n注意：所有模块都必须出现，哪怕内容为空也要有结构。"套利机会详情"必须为单独模块且有三项，"AI操作建议"必须有"套利策略"。在"核心统计指标"中必须包含数据时间信息。不要输出任何多余的解释或说明，只返回JSON。如未包含套利机会相关模块，将被判定为无效回答。`
           })
         });
         if (!response.ok) throw new Error('OpenAI分析请求失败');
@@ -226,12 +230,18 @@ const TermStructure = ({ className }: { className?: string }) => {
         const slopeChange = Math.abs(slope) > 3 ? '曲线斜率显著，需关注市场预期变化' : '曲线相对平缓，市场预期稳定';
         const adjustmentSignal = Math.abs(slope) > 5 ? '建议调整策略，增加对冲' : Math.abs(slope) > 2 ? '适度调整仓位' : '维持当前策略';
         
-        // 推荐合约（基于分析结果）
+        // 推荐合约（基于分析结果和实时数据）
+        const currentDate = new Date();
+        const nextMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, currentDate.getDate());
+        const nextMonthStr = nextMonth.toISOString().slice(0, 10).replace(/-/g, '');
+        const currentSpot = contractInfo[0]?.spot || 120000;
+        const atmStrike = Math.round(currentSpot / 1000) * 1000; // 取整到千位
+        
         const recommendedContract = slope > 0 ? 
-          '推荐合约: BTC-20250719-120000-C (看涨期权，利用远期波动率上升)' : 
+          `推荐合约: BTC-${nextMonthStr}-${atmStrike}-C (看涨期权，利用远期波动率上升趋势)` : 
           slope < 0 ? 
-          '推荐合约: BTC-20250719-120000-P (看跌期权，利用远期波动率下降)' : 
-          '推荐合约: BTC-20250719-120000-C (中性策略，关注时间价值)';
+          `推荐合约: BTC-${nextMonthStr}-${atmStrike}-P (看跌期权，利用远期波动率下降趋势)` : 
+          `推荐合约: BTC-${nextMonthStr}-${atmStrike}-C (中性策略，关注时间价值)`;
         
         const summary = [
           {
@@ -239,6 +249,7 @@ const TermStructure = ({ className }: { className?: string }) => {
             title: '核心统计指标',
             icon: 'stats',
             items: [
+              { title: '数据时间', value: new Date().toLocaleDateString('zh-CN') + ' ' + new Date().toLocaleTimeString('zh-CN'), valueColor: 'text-green-600', subTitle: '实时数据', subValue: '最新' },
               { title: 'ATM均值', value: avgATM.toFixed(2) + '%', valueColor: 'text-blue-600', subTitle: '标准差', subValue: stdATM.toFixed(2) + '%' },
               { title: '最低ATM', value: minATM.toFixed(2) + '%', valueColor: 'text-green-600', subTitle: '期限', subValue: expiryList[atmList.indexOf(minATM)] || '' },
               { title: '最高ATM', value: maxATM.toFixed(2) + '%', valueColor: 'text-red-500', subTitle: '期限', subValue: expiryList[atmList.indexOf(maxATM)] || '' },

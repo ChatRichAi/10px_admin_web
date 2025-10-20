@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Card from "@/components/Card";
 import dynamic from "next/dynamic";
 import { useVolSurfaceData } from "@/hooks/useVolSurfaceData";
+import { usePandaFactor, TechnicalIndicator } from "@/hooks/usePandaFactor";
 import Plot from 'react-plotly.js';
 import { useColorMode } from "@chakra-ui/react";
 import TimerSettingsModal from '@/components/TimerSettings';
@@ -13,19 +14,19 @@ const loadingStyles = `
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
   }
-  
+
   @keyframes ai-pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.8; transform: scale(1.05); }
   }
-  
+
   @keyframes ai-bounce-delayed {
     0%, 20%, 53%, 80%, 100% { transform: translate3d(0,0,0); }
     40%, 43% { transform: translate3d(0,-8px,0); }
     70% { transform: translate3d(0,-4px,0); }
     90% { transform: translate3d(0,-2px,0); }
   }
-  
+
   .ai-spin { animation: ai-spin 2s linear infinite; }
   .ai-pulse { animation: ai-pulse 2s ease-in-out infinite; }
   .ai-bounce-delayed { animation: ai-bounce-delayed 1.4s ease-in-out infinite; }
@@ -60,6 +61,7 @@ const VolSurface = ({ className }: { className?: string }) => {
   const [aiSummary, setAiSummary] = useState<any>(null);
   const [showAISummary, setShowAISummary] = useState(false);
   const [showTimerModal, setShowTimerModal] = useState(false);
+  const [showFactorAnalysis, setShowFactorAnalysis] = useState(false);
   const [timerSettings, setTimerSettings] = useState({
     enabled: false,
     interval: 30, // 分钟
@@ -71,13 +73,13 @@ const VolSurface = ({ className }: { className?: string }) => {
   
   // 生成唯一ID，防止多个VolSurface组件冲突
   const uniqueId = React.useMemo(() => `vol-surface-${Math.random().toString(36).substr(2, 9)}`, []);
-  
+
   // 添加自定义样式
   React.useEffect(() => {
     const style = document.createElement('style');
     style.textContent = loadingStyles;
     document.head.appendChild(style);
-    
+
     return () => {
       document.head.removeChild(style);
     };
@@ -85,6 +87,13 @@ const VolSurface = ({ className }: { className?: string }) => {
   
   // 使用自定义Hook获取数据
   const { data, loading, error, fetchData, refresh } = useVolSurfaceData(symbol, true, 5 * 60 * 1000);
+  const { 
+    technicalIndicators, 
+    loading: factorLoading, 
+    error: factorError, 
+    getTechnicalIndicators, 
+    isServiceOnline 
+  } = usePandaFactor(symbol, true, 5 * 60 * 1000);
   const { colorMode } = useColorMode();
   const isDark = colorMode === "dark";
   const axisColor = isDark ? "#fff" : "#222";
@@ -197,7 +206,14 @@ const VolSurface = ({ className }: { className?: string }) => {
         termSlope,
         skew,
         maxPos: [data.xAxis[maxPos[0]], data.yAxis[maxPos[1]]],
-        minPos: [data.xAxis[minPos[0]], data.yAxis[minPos[1]]]
+        minPos: [data.xAxis[minPos[0]], data.yAxis[minPos[1]]],
+        dataTimestamp: new Date().toISOString(),
+        dataDate: new Date().toLocaleDateString('zh-CN'),
+        dataTime: new Date().toLocaleTimeString('zh-CN'),
+        isRealTimeData: true,
+        // 添加技术指标数据
+        technicalIndicators: technicalIndicators || [],
+        factorServiceStatus: isServiceOnline ? 'online' : 'offline'
       };
 
       // 调用OpenAI API
@@ -451,7 +467,14 @@ const VolSurface = ({ className }: { className?: string }) => {
         termSlope,
         skew,
         maxPos: [data.xAxis[maxPos[0]], data.yAxis[maxPos[1]]],
-        minPos: [data.xAxis[minPos[0]], data.yAxis[minPos[1]]]
+        minPos: [data.xAxis[minPos[0]], data.yAxis[minPos[1]]],
+        dataTimestamp: new Date().toISOString(),
+        dataDate: new Date().toLocaleDateString('zh-CN'),
+        dataTime: new Date().toLocaleTimeString('zh-CN'),
+        isRealTimeData: true,
+        // 添加技术指标数据
+        technicalIndicators: technicalIndicators || [],
+        factorServiceStatus: isServiceOnline ? 'online' : 'offline'
       };
 
       // 调用OpenAI API
@@ -963,6 +986,18 @@ const VolSurface = ({ className }: { className?: string }) => {
             )}
           </button>
           <button 
+            className={`px-2 py-1 text-xs font-medium rounded-md transition-all duration-200 ${
+              isServiceOnline 
+                ? 'bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800' 
+                : 'bg-gray-400 text-white cursor-not-allowed'
+            }`}
+            title={isServiceOnline ? '因子分析' : 'PandaFactor服务不可用'}
+            onClick={() => setShowFactorAnalysis(true)}
+            disabled={!isServiceOnline}
+          >
+            因子
+          </button>
+          <button 
             className={`p-1 text-theme-secondary hover:text-theme-primary transition-colors ${timerSettings.enabled ? 'text-green-500' : ''}`}
             onClick={() => setShowTimerModal(true)}
             title={timerSettings.enabled ? '定时器已启用' : '设置定时AI分析'}
@@ -1139,6 +1174,76 @@ const VolSurface = ({ className }: { className?: string }) => {
           }}
           onClose={() => setShowTimerModal(false)}
         />
+      )}
+
+      {/* 因子分析模态框 */}
+      {showFactorAnalysis && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                {symbol.toUpperCase()} 技术指标分析
+              </h3>
+              <button
+                onClick={() => setShowFactorAnalysis(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              {factorLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                    <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    加载技术指标中...
+                  </div>
+                </div>
+              ) : factorError ? (
+                <div className="text-center py-8">
+                  <div className="text-red-500 mb-2">⚠️</div>
+                  <p className="text-gray-600 dark:text-gray-400">{factorError}</p>
+                </div>
+              ) : technicalIndicators && technicalIndicators.length > 0 ? (
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                  {technicalIndicators.map((indicator, index) => (
+                    <div key={index} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-semibold text-gray-900 dark:text-white">
+                          {indicator.name}
+                        </h4>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          indicator.signal === 'bullish' 
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                            : indicator.signal === 'bearish'
+                            ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-200'
+                        }`}>
+                          {indicator.signal === 'bullish' ? '看涨' : 
+                           indicator.signal === 'bearish' ? '看跌' : '中性'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                        {indicator.description}
+                      </p>
+                      <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {indicator.value.toFixed(2)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 mb-2">📊</div>
+                  <p className="text-gray-600 dark:text-gray-400">暂无技术指标数据</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </Card>
   );
